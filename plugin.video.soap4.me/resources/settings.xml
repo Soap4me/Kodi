@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<settings>
+	<setting id="username" type="text" label="Ваш логин" default="" />
+	<setting id="password" type="text" label="Ваш пароль" option="hidden" default="" />
+	<setting id="HD" type="bool" label="Показывaть только 720p по возможности" default="true" />
+	<setting id="sorting" type="bool" label="Показывать сверху последнюю серию" default="true" />
+</settings>
