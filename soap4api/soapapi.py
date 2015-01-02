@@ -1,12 +1,19 @@
 # -*- encoding: utf-8 -*-
 
+import sys
+
 import cookielib
+import gzip
+import os, os.path
+import tempfile
 import urllib
 import urllib2
-import tempfile
-import os, os.path
 import StringIO
-import gzip
+
+try:
+	import json
+except:
+	import simplejson as json
 
 
 class SoapApi(object):
@@ -100,5 +107,8 @@ class SoapApi(object):
         print text
 
 if __name__ == "__main__":
+    if len(sys.argv) != 3:
+        print "Use: python soapapi.py <login> <password>"
+
     s = SoapApi(path=os.path.abspath("."))
-    s.login("login", "password")
+    s.login(sys.argv[1], sys.argv[2])
