@@ -189,27 +189,41 @@ class SoapApi(object):
         self._load_token(True)
 
     def list(self, sfilter="all", sid=None):
-        self._load_token()
+        def request():
+            self._load_token()
 
-        if sid is None:
-            if sfilter == "my":
-                url = "/api/soap/my/"
+            if sid is None:
+                if sfilter == "my":
+                    url = "/api/soap/my/"
+                else:
+                    url = "/api/soap/"
             else:
-                url = "/api/soap/"
-        else:
-            url = "/api/episodes/{0}/".format(sid)
+                url = "/api/episodes/{0}/".format(sid)
 
-        cache_id = filter(lambda c: c not in ",./", url)
-        text = self.cache.get(cache_id)
+            cache_id = filter(lambda c: c not in ",./", url)
+            text = self.cache.get(cache_id)
 
-        if text != False:
+            if text != False:
+                return text
+
+            text = self._request(self.HOST + url)
+            self.cache.set(cache_id, text)
+
             return text
 
-        text = self._request(self.HOST + url)
-        self.cache.set(cache_id, text)
+        text = request()
+        data = json.loads(text)
 
-        return text
+        return data
 
+    def list_all(self):
+        return self.list("all")
+
+    def list_my(self):
+        return self.list("my")
+
+    def list_episodes(self, row):
+        return self.list(sid=row['sid'])
 
 if __name__ == "__main__":
     if len(sys.argv) != 3:
@@ -218,13 +232,19 @@ if __name__ == "__main__":
 
     path = os.path.abspath(".")
     path = os.path.join(path, "soap4_data")
-    if os.path.exists(path):
-        shutil.rmtree(path)
-    os.makedirs(path)
+    #if os.path.exists(path):
+    #    shutil.rmtree(path)
+    #os.makedirs(path)
 
     s = SoapApi(path, auth={
         "username": sys.argv[1],
         "password": sys.argv[2]
     })
-    print s.list()
+    data = s.list_all()
+    print len(data)
+
+    data = s.list_episodes(data[4])
+
+    print len(data)
+
 
