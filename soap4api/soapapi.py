@@ -4,6 +4,7 @@ import sys
 
 import cookielib
 import gzip
+import hashlib
 import os, os.path
 import tempfile
 import time
@@ -223,7 +224,41 @@ class SoapApi(object):
         return self.list("my")
 
     def list_episodes(self, row):
+        if 'sid' not in row:
+            raise SoapException("Bad serial row.")
+
         return self.list(sid=row['sid'])
+
+    def _get_video(self, sid, eid, ehash):
+        self._load_token()
+        myhash = hashlib.md5(
+            str(self.token) + \
+            str(eid) + \
+            str(sid) + \
+            str(ehash)
+        ).hexdigest()
+
+        data = {
+            "what": "player",
+            "do": "load",
+            "token": self.token,
+            "eid": eid,
+            "hash": myhash
+        }
+        url = self.HOST + "/callback/"
+        result = self._request(url, data)
+
+        data = json.loads(result)
+        if not isinstance(data, dict) or data.get("ok", 0) == 0:
+            raise SoapException("Bad getting videolink")
+
+        return "http://%s.soap4.me/%s/%s/%s/" % (data['server'], self.token, eid, myhash)
+
+    def get_video(self, row):
+        if 'sid' not in row or 'eid' not in row or 'hash' not in row:
+            raise SoapException("Bad episode row.")
+
+        return self._get_video(row['sid'], row['eid'], row['hash'])
 
 if __name__ == "__main__":
     if len(sys.argv) != 3:
@@ -246,5 +281,7 @@ if __name__ == "__main__":
     data = s.list_episodes(data[4])
 
     print len(data)
+
+    print s.get_video(data[2])
 
 
