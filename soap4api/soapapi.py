@@ -9,6 +9,7 @@ import tempfile
 import time
 import urllib
 import urllib2
+import shutil
 import StringIO
 
 try:
@@ -21,7 +22,35 @@ class SoapException(Exception):
     pass
 
 
+class SoapCache(object):
+    def __init__(self, path, lifetime=30):
+        self.path = os.path.join(path, "cache")
+        if not os.path.exists(self.path):
+            os.makedirs(self.path)
+
+        self.lifetime = lifetime
+
+    def get(self, cache_id):
+        filename = os.path.join(self.path, str(cache_id))
+        if not os.path.exists(filename) or not os.path.isfile(filename):
+            return False
+
+        max_time = time.time() - self.lifetime * 60
+        if os.path.getmtime(filename) <= max_time:
+            return False
+
+        with open(filename, "r") as f:
+            return f.read()
+
+    def set(self, cache_id, text):
+        filename = os.path.join(self.path, str(cache_id))
+        with open(filename, "w") as f:
+            f.write(text)
+
+
 class SoapApi(object):
+
+    HOST = "http://soap4.me"
 
     def __init__(self, path=None, auth=None):
         if path is None:
@@ -33,6 +62,8 @@ class SoapApi(object):
         self.token = None
         self.CJ = cookielib.CookieJar()
         self.auth = auth
+
+        self.cache = SoapCache(path, 15)
 
     def _cookies_init(self):
         urllib2.install_opener(
@@ -66,7 +97,7 @@ class SoapApi(object):
             cf.write(Cook.value)
             cf.close()
 
-    def _request(self, url, post=None, use_cookie=False):
+    def _request(self, url, post=None, use_token=True):
         if not isinstance(post, dict):
             post = None
 
@@ -77,13 +108,13 @@ class SoapApi(object):
         req.add_header('Accept-encoding', 'gzip')
         req.add_header('x-im-raspberry', 'yes')
 
-        if self.token is not None:
+        if use_token and self.token is not None:
             req.add_header('x-api-token', self.token)
 
         if post is not None:
             req.add_header('Content-Type', 'application/x-www-form-urlencoded')
 
-        if use_cookie:
+        if use_token:
             self._cookies_load(req)
 
         post_data = None
@@ -111,22 +142,27 @@ class SoapApi(object):
             f.write(json.dumps(data))
 
     def _load_token(self, from_login=False):
-        token_path = os.path.join(self.path, "token")
-        if not os.path.exists(token_path):
-            return False
 
-        with open(token_path, "r") as f:
-            dump = f.read()
-            data = json.loads(dump)
+        def load():
+            token_path = os.path.join(self.path, "token")
+            if not os.path.exists(token_path):
+                return False
 
-        if data.get('token') is None or data.get('till', time.time() + 10) <= time.time():
+            with open(token_path, "r") as f:
+                dump = f.read()
+                data = json.loads(dump)
+
+            if data.get('token') is None or data.get('till', time.time() + 10) <= time.time():
+                return False
+
+            self.token = data.get('token')
+            return True
+
+        if not load():
             if from_login or self.auth is None:
                 raise SoapException("Bad authorization. Token process.")
 
             self.login()
-
-
-        self.token = data.get('token')
 
     def login(self, username=None, password=None):
         if username is None and password is None and self.auth is not None \
@@ -139,8 +175,9 @@ class SoapApi(object):
 
 
         text = self._request(
-            "http://soap4.me/login/",
-            post={"login": username, "password": password}
+            self.HOST + "/login/",
+            post={"login": username, "password": password},
+            use_token=False
         )
 
         data = json.loads(text)
@@ -151,17 +188,43 @@ class SoapApi(object):
         self._save_token(data)
         self._load_token(True)
 
+    def list(self, sfilter="all", sid=None):
+        self._load_token()
+
+        if sid is None:
+            if sfilter == "my":
+                url = "/api/soap/my/"
+            else:
+                url = "/api/soap/"
+        else:
+            url = "/api/episodes/{0}/".format(sid)
+
+        cache_id = filter(lambda c: c not in ",./", url)
+        text = self.cache.get(cache_id)
+
+        if text != False:
+            return text
+
+        text = self._request(self.HOST + url)
+        self.cache.set(cache_id, text)
+
+        return text
+
+
 if __name__ == "__main__":
     if len(sys.argv) != 3:
         print "Use: python soapapi.py <login> <password>"
+        exit(0)
 
     path = os.path.abspath(".")
     path = os.path.join(path, "soap4_data")
-    if not os.path.exists(path):
-        os.makedirs(path)
+    if os.path.exists(path):
+        shutil.rmtree(path)
+    os.makedirs(path)
 
     s = SoapApi(path, auth={
         "username": sys.argv[1],
         "password": sys.argv[2]
     })
-    s.login()
+    print s.list()
+
