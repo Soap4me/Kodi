@@ -4,7 +4,10 @@ import sys
 
 import cookielib
 import gzip
-import hashlib
+try:
+    import hashlib
+except:
+    import md5 as hashlib
 import os, os.path
 import tempfile
 import time
@@ -12,6 +15,8 @@ import urllib
 import urllib2
 import shutil
 import StringIO
+import socket
+socket.setdefaulttimeout(15)
 
 try:
     import json

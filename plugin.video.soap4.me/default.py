@@ -24,6 +24,8 @@ except:
     import md5 as hashlib
 socket.setdefaulttimeout(15)
 
+from collections import defaultdict
+
 h = int(sys.argv[1])
 
 __addon__ = xbmcaddon.Addon(id = 'plugin.video.soap4me')
@@ -627,38 +629,46 @@ def addon_new2_main():
 
     parts = kodi_parse_uri()
 
+    rows = list()
 
     if len(parts) == 1:
-        kodi_draw_list(parts, [
+        rows = [
             ("my", "Мои сериалы", "", None),
             ("all", "Все сериалы", "", None)
-        ])
+        ]
     elif len(parts) == 2:
         if parts[-1] == "my":
-            rows = s.list_my()
+            lines = s.list_my()
         else:
-            rows = s.list_all()
+            lines = s.list_all()
 
-        lines = list()
-        for row in rows:
-            lines.append((
+        for row in lines:
+            rows.append((
                 row['sid'],
                 row['title'],
                 row['description'].encode('utf-8'),
                 row['sid']
             ))
 
-        kodi_draw_list(parts, lines)
     elif 3 <= len(parts) <= 4:
-        s.list_episodes()
+        lines = s.list_episodes(sid=parts[2])
+        data = defaultdict(list)
+        for row in lines:
+            #, row['translate'].encode("utf-8")
+            key = (int(row['season']), row['quality'])
+            data[key].append(row)
+
+        def name_key(key):
+            return "Season %s. %s" % key
+
         if len(parts) == 3:
+            keys = data.keys()
+            keys.sort()
 
+            for k in keys:
+                rows.append((",".join(map(str, k)), name_key(k), "", parts[2]))
 
-
-
-
-
-
+    kodi_draw_list(parts, rows)
     #addon_main()
 
 addon_new2_main()
