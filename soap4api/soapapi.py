@@ -54,19 +54,26 @@ class SoapApi(object):
     HOST = "http://soap4.me"
 
     def __init__(self, path=None, auth=None):
-        if path is None:
+        if path == "__init__":
             path = tempfile.gettempdir()
             path = os.path.join(path, 'soap4kobi')
             if not os.path.exists(path):
                 os.makedirs(path)
         self.path = path
         self.token = None
-        self.CJ = cookielib.CookieJar()
         self.auth = auth
 
-        self.cache = SoapCache(path, 15)
+        if path is not None:
+            self.cache = SoapCache(path, 15)
+            self.CJ = cookielib.CookieJar()
+        else:
+            self.cache = None
+            self.CJ = None
 
     def _cookies_init(self):
+        if self.CJ is None:
+            return
+
         urllib2.install_opener(
             urllib2.build_opener(
                 urllib2.HTTPCookieProcessor(self.CJ)
@@ -79,6 +86,9 @@ class SoapApi(object):
             #print '[%s]: os.makedirs(cookie_path=%s)' % (addon_id, cookie_path)
 
     def _cookies_load(self, req):
+        if self.CJ is None:
+            return
+
         cookie_send = {}
         for cookie_fname in os.listdir(self.cookie_path):
             cookie_file = os.path.join(self.cookie_path, cookie_fname)
@@ -92,6 +102,9 @@ class SoapApi(object):
         req.add_header('Cookie', cookie_string)
 
     def _cookies_save(self):
+        if self.CJ is None:
+            return
+
         for Cook in self.CJ:
             cookie_file = os.path.join(self.cookie_path, Cook.name)
             cf = open(cookie_file, 'w')
@@ -165,7 +178,15 @@ class SoapApi(object):
 
             self.login()
 
-    def login(self, username=None, password=None):
+    @classmethod
+    def check_login(cls, username=None, password=None):
+        s = cls()
+        try:
+            return s.login(username, password, only_check=True)
+        except SoapException as e:
+            return False
+
+    def login(self, username=None, password=None, only_check=False):
         if username is None and password is None and self.auth is not None \
                 and 'username' in self.auth and 'password' in self.auth:
             username = self.auth['username']
@@ -185,6 +206,9 @@ class SoapApi(object):
 
         if not isinstance(data, dict) or data.get('ok') != 1:
             raise SoapException("Bad authorization. Soap4.me process.")
+
+        if only_check:
+            return True
 
         self._save_token(data)
         self._load_token(True)
@@ -283,5 +307,3 @@ if __name__ == "__main__":
     print len(data)
 
     print s.get_video(data[2])
-
-

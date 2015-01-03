@@ -5,8 +5,8 @@ import sys, os, xbmcaddon
 __settings__ = xbmcaddon.Addon(id='plugin.video.soap4me')
 sys.path.append(os.path.join(__settings__.getAddonInfo('path').replace(';', ''), 'resources', 'lib'))
 
-
-
+from soap4api.soapapi import SoapApi, SoapException
+import xbmc
 
 import xbmc, xbmcgui, xbmcplugin, xbmcaddon
 import urllib2, urllib, os, xml.dom.minidom, cookielib, base64
@@ -43,8 +43,56 @@ fanart = xbmc.translatePath(addon_fanart)
 profile = xbmc.translatePath(addon_profile)
 xbmcplugin.setPluginFanart(h, fanart)
 
+
+def soap_method(name):
+    def wrapper2(func):
+        def wrapper(*args, **kwargs):
+            print "Soap - (" + str(name) + ")"
+            return func(*args, **kwargs)
+        return wrapper
+    return wrapper2
+
+class SoapPlayer(xbmc.Player):
+    def __init__(self, *args):
+        xbmc.Player.__init__(self)
+
+    @soap_method("onPlayBackStarted")
+    def onPlayBackStarted(self):
+        """Will be called when xbmc starts playing a file."""
+        pass
+
+    @soap_method("onPlayBackEnded")
+    def onPlayBackEnded(self):
+        """Will be called when xbmc stops playing a file."""
+        pass
+
+    @soap_method("onPlayBackStopped")
+    def onPlayBackStopped(self):
+        """Will be called when user stops xbmc playing a file."""
+
+    @soap_method("onPlayBackPaused")
+    def onPlayBackPaused(self):
+        """Will be called when user pauses a playing file."""
+        pass
+
+    @soap_method("onPlayBackResumed")
+    def onPlayBackResumed(self):
+        """Will be called when user resumes a paused file."""
+        pass
+
+    @soap_method("onPlayBackEnded")
+    def onPlayBackEnded(self):
+        pass
+
+
 def showMessage(heading, message, times = 3000):
     xbmc.executebuiltin('XBMC.Notification("%s", "%s", %s, "%s")'%(heading, message, times, icon))
+
+def message_ok(message):
+    xbmcgui.Dialog().notification("Soap4.me", message, icon=xbmcgui.NOTIFICATION_INFO)
+
+def message_error(message):
+    xbmcgui.Dialog().notification("Soap4.me", message, icon=xbmcgui.NOTIFICATION_ERROR)
 
 
 def soap4me_get_cashe(id, cashe_min):
@@ -308,7 +356,7 @@ def soap4me_get_play(sid, eid, ehash):
 
 def soap4me_draw_categories():
     cats = [
-        {'title':'Не мои сериалы','uri': '%s?comtype=my' % (sys.argv[0])},
+        {'title':'Мои сериалы','uri': '%s?comtype=my' % (sys.argv[0])},
         {'title':'Все сериалы','uri': '%s?comtype=all' % (sys.argv[0])}
     ]
     for row in cats:
@@ -405,7 +453,6 @@ def soap4me_draw_episodes(sid,season):
 
     for row in data:
         if season == row['season']:
-            print row['eid'],episode_names.values()
             if row['eid'] in episode_names.values():
                 info = {}
                 info['title'] = "S" + str(row['season']) \
@@ -491,5 +538,128 @@ def addon_main():
     else:
         soap4me_draw_categories()
 
-addon_main()
+def addon_new_main():
+    player = SoapPlayer()
+
+    s = SoapApi(os.path.join(profile, "soap4me"), auth={
+        "username": "login",
+        "password": "password"
+    })
+
+    data = s.list_all()
+    data = s.list_episodes(data[4])
+    url = s.get_video(data[2])
+
+    player.play(url)
+    #while(not xbmc.abortRequested):
+    #    xbmc.sleep(100)
+
+    print "Soap ENDENDEND"
+
+
+
+def kodi_get_auth():
+    username = __addon__.getSetting('username')
+    password = __addon__.getSetting('password')
+
+    is_check = False
+    while len(username) == 0 or len(password) == 0:
+        is_check = True
+        __addon__.openSettings()
+        username = __addon__.getSetting('username')
+        password = __addon__.getSetting('password')
+
+
+    if is_check:
+        if not SoapApi.check_login(username, password):
+            message_error("Login or password are incorrect")
+        else:
+            message_ok("Auth is correct")
+
+    return {
+        "username": username,
+        "password": password
+    }
+
+def kodi_draw_list(parts, rows):
+    # row = (uri, title, description, sid)
+
+    for (uri, title, description, sid) in rows:
+        info = {}
+        info['title'] = title
+        info['plot'] = description
+        serial = str(sid)
+        img = "http://covers.s4me.ru/soap/big/"+serial+".jpg"
+
+        vtype = 'video'
+        IsFolder = True
+
+        li = xbmcgui.ListItem(info['title'], iconImage = img, thumbnailImage = img)
+
+        li.setInfo(type = vtype, infoLabels = info)
+        #ruri = sys.argv[0] + "?" + urllib.urlencode({"path":"/".join(parts + [uri])})
+        ruri = sys.argv[0] + "?path="+ "/".join(parts + [uri])
+        print "Soap: " + ruri
+        xbmcplugin.addDirectoryItem(h, ruri, li, IsFolder)
+
+
+
+    xbmcplugin.addSortMethod(h, xbmcplugin.SORT_METHOD_UNSORTED)
+    xbmcplugin.addSortMethod(h, xbmcplugin.SORT_METHOD_DATE)
+    xbmcplugin.addSortMethod(h, xbmcplugin.SORT_METHOD_DURATION)
+    xbmcplugin.addSortMethod(h, xbmcplugin.SORT_METHOD_GENRE)
+    xbmcplugin.addSortMethod(h, xbmcplugin.SORT_METHOD_TITLE)
+    xbmcplugin.addSortMethod(h, xbmcplugin.SORT_METHOD_VIDEO_RATING)
+    xbmcplugin.addSortMethod(h, xbmcplugin.SORT_METHOD_VIDEO_RUNTIME)
+    xbmcplugin.addSortMethod(h, xbmcplugin.SORT_METHOD_VIDEO_TITLE)
+    xbmcplugin.addSortMethod(h, xbmcplugin.SORT_METHOD_VIDEO_YEAR)
+    xbmcplugin.addSortMethod(h, xbmcplugin.SORT_METHOD_LABEL)
+    xbmcplugin.endOfDirectory(h)
+
+def kodi_parse_uri():
+    print "Soap: " + sys.argv[2] + ' $$$$$$'
+    return urllib.unquote(sys.argv[2]).split("/")
+
+def addon_new2_main():
+    print "Soap: sys.argv " + repr(sys.argv)
+
+    s = SoapApi(os.path.join(profile, "soap4me"), auth=kodi_get_auth())
+
+    parts = kodi_parse_uri()
+
+
+    if len(parts) == 1:
+        kodi_draw_list(parts, [
+            ("my", "Мои сериалы", "", None),
+            ("all", "Все сериалы", "", None)
+        ])
+    elif len(parts) == 2:
+        if parts[-1] == "my":
+            rows = s.list_my()
+        else:
+            rows = s.list_all()
+
+        lines = list()
+        for row in rows:
+            lines.append((
+                row['sid'],
+                row['title'],
+                row['description'].encode('utf-8'),
+                row['sid']
+            ))
+
+        kodi_draw_list(parts, lines)
+    elif 3 <= len(parts) <= 4:
+        s.list_episodes()
+        if len(parts) == 3:
+
+
+
+
+
+
+
+    #addon_main()
+
+addon_new2_main()
 

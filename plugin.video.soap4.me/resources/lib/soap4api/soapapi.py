@@ -247,11 +247,11 @@ class SoapApi(object):
     def list_my(self):
         return self.list("my")
 
-    def list_episodes(self, row):
-        if 'sid' not in row:
+    def list_episodes(self, row=None, sid=None):
+        if sid is None and (row is None or 'sid' not in row):
             raise SoapException("Bad serial row.")
 
-        return self.list(sid=row['sid'])
+        return self.list(sid=sid or row['sid'])
 
     def _get_video(self, sid, eid, ehash):
         self._load_token()
