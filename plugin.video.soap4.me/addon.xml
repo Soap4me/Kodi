@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<addon id="plugin.video.soap4me" name="Сериалы | Soap4.me" version="0.1.8" provider-name="info@soap4.me">
+<addon id="plugin.video.soap4me" name="Сериалы | Soap4.me" version="0.2.0" provider-name="info@soap4.me">
   <requires><import addon="xbmc.python" version="2.1.0"/></requires>
   <extension point="xbmc.python.pluginsource" provides="video" library="default.py"><provides>video</provides></extension>
   <extension point="xbmc.addon.metadata">
