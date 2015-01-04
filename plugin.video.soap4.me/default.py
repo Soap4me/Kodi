@@ -588,7 +588,7 @@ def kodi_get_auth():
 def kodi_draw_list(parts, rows):
     # row = (uri, title, description, sid)
 
-    for (uri, title, description, img, is_folter) in rows:
+    for (uri, title, description, img, is_folter, is_watched) in rows:
         info = {}
         info['title'] = title
         info['plot'] = description
@@ -596,11 +596,13 @@ def kodi_draw_list(parts, rows):
         vtype = 'video'
 
         li = xbmcgui.ListItem(info['title'], iconImage = img, thumbnailImage = img)
+        if is_watched:
+            info["playcount"] = 10
 
-        li.setInfo(type = vtype, infoLabels = info)
+        li.setInfo(type=vtype, infoLabels=info)
         #ruri = sys.argv[0] + "?" + urllib.urlencode({"path":"/".join(parts + [uri])})
         ruri = sys.argv[0] + "?path="+ "/".join(parts + [uri])
-        print "Soap: " + ruri
+        #print "Soap: " + ruri
         xbmcplugin.addDirectoryItem(h, ruri, li, is_folter)
 
 
@@ -618,7 +620,7 @@ def kodi_draw_list(parts, rows):
     xbmcplugin.endOfDirectory(h)
 
 def kodi_parse_uri():
-    print "Soap: " + sys.argv[2] + ' $$$$$$'
+    #print "Soap: " + sys.argv[2] + ' $$$$$$'
     return urllib.unquote(sys.argv[2])[6:].split("/")
 
 def serial_img(sid):
@@ -632,7 +634,7 @@ def season_img(season_id):
     return "http://covers.s4me.ru/season/big/{0}.jpg".format(season_id)
 
 def addon_new2_main():
-    print "Soap: sys.argv " + repr(sys.argv)
+    #print "Soap: sys.argv " + repr(sys.argv)
 
     s = SoapApi(os.path.join(profile, "soap4me"), auth=kodi_get_auth())
 
@@ -642,8 +644,8 @@ def addon_new2_main():
 
     if len(parts) == 1:
         rows = [
-            ("my", "Мои сериалы", "", None, True),
-            ("all", "Все сериалы", "", None, True)
+            ("my", "Мои сериалы", "", None, True, False),
+            ("all", "Все сериалы", "", None, True, False)
         ]
     elif len(parts) == 2:
         if parts[-1] == "my":
@@ -657,7 +659,8 @@ def addon_new2_main():
                 row['title'],
                 row['description'].encode('utf-8'),
                 serial_img(row['sid']),
-                True
+                True,
+                False
 
             ))
 
@@ -687,7 +690,8 @@ def addon_new2_main():
                     title,
                     "",
                     season_img(row["season_id"]),
-                    True
+                    True,
+                    False
                 ))
 
             if len(rows) == 1:
@@ -700,13 +704,16 @@ def addon_new2_main():
             k = (int(season), quality)
             season_list = data[k]
             season_list.sort(key=lambda row: int(row['episode']))
+
             for row in season_list:
+                print "Soap " + row['eid'] + " " + repr(row)
                 rows.append((
                     row["eid"],
                     row["title_en"],
                     "",
                     season_img(row["season_id"]),
-                    False
+                    False,
+                    row['watched'] is not None
                 ))
 
         if len(parts) >= 5:
@@ -721,7 +728,7 @@ def addon_new2_main():
                 li = xbmcgui.ListItem(row['title_en'], iconImage=img, thumbnailImage=img)
                 p.play(url, li)
                 i = 0
-                while(not xbmc.abortRequested):
+                while p.isPlaying():
                     xbmc.sleep(100)
                     print "Sleep", i
                     i += 1
