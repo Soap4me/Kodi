@@ -67,6 +67,7 @@ class SoapApi(object):
         self.path = path
         self.token = None
         self.auth = auth
+        self.till_days = None
 
         if path is not None:
             self.cache = SoapCache(path, 15)
@@ -175,6 +176,7 @@ class SoapApi(object):
                 return False
 
             self.token = data.get('token')
+            self.till_days = int((int(data.get('till')) - time.time()) / 86400)
             return True
 
         if not load():
@@ -289,6 +291,10 @@ class SoapApi(object):
 
         return self._get_video(row['sid'], row['eid'], row['hash'])
 
+    def get_till_days(self):
+        self._load_token()
+        return self.till_days
+
 if __name__ == "__main__":
     if len(sys.argv) != 3:
         print "Use: python soapapi.py <login> <password>"
@@ -310,5 +316,5 @@ if __name__ == "__main__":
     data = s.list_episodes(data[4])
 
     print len(data)
-
     print s.get_video(data[2])
+    print s.get_till_days()

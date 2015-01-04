@@ -165,6 +165,15 @@ def season_img(season_id):
         return None
     return "http://covers.s4me.ru/season/big/{0}.jpg".format(season_id)
 
+def title_episode(row):
+    return "S{season}E{episode} | {quality} | {translate} | {title}".format(
+        season=str(row['season']),
+        episode=str(row['episode']),
+        quality=row['quality'].encode('utf-8'),
+        translate=row['translate'].encode('utf-8'),
+        title=row['title_en'].encode('utf-8').replace('&#039;', "'").replace("&amp;", "&").replace('&quot;','"'),
+    )
+
 def addon_main():
     #print "Soap: sys.argv " + repr(sys.argv)
 
@@ -179,6 +188,7 @@ def addon_main():
             ("my", "Мои сериалы", "", None, True, False),
             ("all", "Все сериалы", "", None, True, False)
         ]
+        message_ok("{0} paid days left".format(s.get_till_days()))
     elif len(parts) == 2:
         if parts[-1] == "my":
             lines = s.list_my()
@@ -241,7 +251,7 @@ def addon_main():
                 #print "Soap " + row['eid'] + " " + repr(row)
                 rows.append((
                     row["eid"],
-                    row["title_en"],
+                    title_episode(row),
                     "",
                     season_img(row["season_id"]),
                     False,
@@ -257,7 +267,10 @@ def addon_main():
 
                 url = s.get_video(row)
                 img = season_img(row['season_id'])
-                li = xbmcgui.ListItem(row['title_en'], iconImage=img, thumbnailImage=img)
+                title = title_episode(row)
+
+
+                li = xbmcgui.ListItem(title, iconImage=img, thumbnailImage=img)
                 p.play(url, li)
                 while p.is_soap_play() and not xbmc.abortRequested:
                     xbmc.sleep(1000)
