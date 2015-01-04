@@ -1,13 +1,15 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
+
+import xbmc, xbmcgui, xbmcplugin, xbmcaddon
+import urllib, os, sys
+
 __settings__ = xbmcaddon.Addon(id='plugin.video.soap4me')
 sys.path.append(os.path.join(__settings__.getAddonInfo('path').replace(';', ''), 'resources', 'lib'))
 
 from soap4api.soapapi import SoapApi, SoapException
 
-import xbmc, xbmcgui, xbmcplugin, xbmcaddon
-import urllib, os
 try:
     import json
 except:
