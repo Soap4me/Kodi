@@ -9,6 +9,7 @@ __settings__ = xbmcaddon.Addon(id='plugin.video.soap4me')
 sys.path.append(os.path.join(__settings__.getAddonInfo('path').replace(';', ''), 'resources', 'lib'))
 
 from soap4api.soapapi import SoapApi, SoapException
+import time
 
 try:
     import json
@@ -55,16 +56,18 @@ class SoapPlayer(xbmc.Player):
     @soap_method("__init__")
     def __init__(self, *args):
         xbmc.Player.__init__(self, *args)
+        self.is_start = False
+        self.watched_time = False
 
     @soap_method("onPlayBackStarted")
     def onPlayBackStarted(self):
         """Will be called when xbmc starts playing a file."""
-        pass
+        self.is_start = True
 
     @soap_method("onPlayBackEnded")
     def onPlayBackEnded(self):
         """Will be called when xbmc stops playing a file."""
-        pass
+        print "Soap "+ str(self.watched_time) + "!"
 
     @soap_method("onPlayBackStopped")
     def onPlayBackStopped(self):
@@ -80,9 +83,12 @@ class SoapPlayer(xbmc.Player):
         """Will be called when user resumes a paused file."""
         pass
 
-    @soap_method("onPlayBackEnded")
-    def onPlayBackEnded(self):
-        pass
+    def is_soap_play(self):
+        try:
+            self.watched_time = self.getTime()
+        except:
+            pass
+        return not self.is_start or self.isPlaying()
 
 def message_ok(message):
     xbmcgui.Dialog().notification("Soap4.me", message, icon=xbmcgui.NOTIFICATION_INFO)
@@ -232,7 +238,7 @@ def addon_main():
             season_list.sort(key=lambda row: int(row['episode']))
 
             for row in season_list:
-                print "Soap " + row['eid'] + " " + repr(row)
+                #print "Soap " + row['eid'] + " " + repr(row)
                 rows.append((
                     row["eid"],
                     row["title_en"],
@@ -253,12 +259,8 @@ def addon_main():
                 img = season_img(row['season_id'])
                 li = xbmcgui.ListItem(row['title_en'], iconImage=img, thumbnailImage=img)
                 p.play(url, li)
-                i = 0
-                while p.isPlaying():
-                    xbmc.sleep(100)
-                    print "Sleep", i
-                    i += 1
-
+                while p.is_soap_play() and not xbmc.abortRequested:
+                    xbmc.sleep(1000)
 
                 return
             parts = parts[:4]
