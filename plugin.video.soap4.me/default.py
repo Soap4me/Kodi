@@ -176,6 +176,22 @@ def title_episode(row):
 
 def addon_main():
     #print "Soap: sys.argv " + repr(sys.argv)
+    setting_reverse = str(__addon__.getSetting('sorting')) == "1" # 0 - down, 1 - up
+
+    # 0 - all, 1 - SD, 2 - 720p
+    setting_quality = lambda row: True
+    if str(__addon__.getSetting('quality')) == "1":
+        setting_quality = lambda row: row['quality'] == "SD"
+    elif str(__addon__.getSetting('quality')) == "2":
+        setting_quality = lambda row: row['quality'] == "720p"
+
+    # 0 - all, 1 - subs, 2 - voice
+    setting_translate = lambda row: True
+    if str(__addon__.getSetting('translate')) == "1":
+        setting_translate = lambda row: row['translate'].strip().encode("utf-8") == "Субтитры"
+    elif str(__addon__.getSetting('translate')) == "2":
+        setting_translate = lambda row: row['translate'].strip().encode("utf-8") != "Субтитры"
+
 
     s = SoapApi(os.path.join(profile, "soap4me"), auth=kodi_get_auth())
 
@@ -188,7 +204,7 @@ def addon_main():
             ("my", "Мои сериалы", "", None, True, False),
             ("all", "Все сериалы", "", None, True, False)
         ]
-        message_ok("{0} paid days left".format(s.get_till_days()))
+        message_ok("Осталось {0} дней".format(s.get_till_days()))
     elif len(parts) == 2:
         if parts[-1] == "my":
             lines = s.list_my()
@@ -208,27 +224,39 @@ def addon_main():
 
     elif 3 <= len(parts):
         lines = s.list_episodes(sid=parts[2])
-        data = defaultdict(list)
+        data = defaultdict(lambda: defaultdict(list))
         for row in lines:
-            #, row['translate'].encode("utf-8")
-            key = (int(row['season']), row['quality'])
-            data[key].append(row)
+            data[int(row['season'])][int(row['episode'])].append(row)
+
+        # Filter by settings
+        for season in data:
+            for episode in data[season]:
+                eps = data[season][episode]
+                new_eps = [row for row in eps if setting_quality(row)]
+                if len(new_eps) > 0:
+                    eps = new_eps
+
+                new_eps = [row for row in eps if setting_translate(row)]
+                if len(new_eps) > 0:
+                    eps = new_eps
+
+                data[season][episode] = eps
 
         if len(parts) == 3:
-            keys = data.keys()
-            keys.sort()
+            seasons = list(data.keys())
+            seasons.sort()
 
-            for k in keys:
-                row = data[k][0]
+            for season in seasons:
+                season_dict = data[season]
+                episode = season_dict.values()[0]
+                row = episode[0]
 
-                title = "Season {season} [{quality}]".format(
-                    season=row['season'],
-                    quality=row['quality']
+                title = "Season {season}".format(
+                    season=season
                 )
 
-
                 rows.append((
-                    ",".join(map(str, k)),
+                    str(season),
                     title,
                     "",
                     season_img(row["season_id"]),
@@ -238,17 +266,18 @@ def addon_main():
 
             if len(rows) == 1:
                 rows =  list()
-                parts.append(keys[0])
+                parts.append(str(data.keys()[0]))
 
-        season_list = list()
+        episodes_list = list()
         if len(parts) >= 4:
-            season, quality = parts[3].split(",", 1)
-            k = (int(season), quality)
-            season_list = data[k]
-            season_list.sort(key=lambda row: int(row['episode']))
+            season = int(parts[3])
+            season_dict = data[season]
+            episodes = season_dict.items()
+            episodes.sort(key=lambda (episode, _): episode, reverse=setting_reverse)
 
-            for row in season_list:
-                #print "Soap " + row['eid'] + " " + repr(row)
+            map(episodes_list.extend, [ep_data for (_, ep_data) in episodes])
+
+            for row in episodes_list:
                 rows.append((
                     row["eid"],
                     title_episode(row),
@@ -260,7 +289,7 @@ def addon_main():
 
         if len(parts) >= 5:
 
-            data = [row for row in season_list if row['eid'] == parts[4]]
+            data = [row for row in episodes_list if row['eid'] == parts[4]]
             if len(data) >= 1:
                 row = data[0]
                 p = SoapPlayer()
