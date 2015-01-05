@@ -7,8 +7,10 @@ import urllib, os, sys
 
 __settings__ = xbmcaddon.Addon(id='plugin.video.soap4me')
 sys.path.append(os.path.join(__settings__.getAddonInfo('path').replace(';', ''), 'resources', 'lib'))
-
-from soap4api.soapapi import SoapApi, SoapException
+try:
+    from soap4api.soapapi import SoapApi, SoapException
+except ImportError:
+    from resources.lib.soap4api.soapapi import SoapApi, SoapException
 import time
 
 try:
@@ -90,11 +92,19 @@ class SoapPlayer(xbmc.Player):
             pass
         return not self.is_start or self.isPlaying()
 
-def message_ok(message):
-    xbmcgui.Dialog().notification("Soap4.me", message, icon=xbmcgui.NOTIFICATION_INFO)
+if getattr(xbmcgui.Dialog, 'notification', False):
+    def message_ok(message):
+        xbmcgui.Dialog().notification("Soap4.me", message, icon=xbmcgui.NOTIFICATION_INFO)
 
-def message_error(message):
-    xbmcgui.Dialog().notification("Soap4.me", message, icon=xbmcgui.NOTIFICATION_ERROR)
+    def message_error(message):
+        xbmcgui.Dialog().notification("Soap4.me", message, icon=xbmcgui.NOTIFICATION_ERROR)
+else:
+    def show_message(message):
+        xbmc.executebuiltin('XBMC.Notification("%s", "%s", %s, "%s")'%("Soap4.me", message, 3000, icon))
+
+    message_ok = show_message
+    message_error = show_message
+
 
 def kodi_get_auth():
     username = __addon__.getSetting('username')
@@ -129,7 +139,11 @@ def kodi_draw_list(parts, rows):
 
         vtype = 'video'
 
-        li = xbmcgui.ListItem(info['title'], iconImage = img, thumbnailImage = img)
+        li = xbmcgui.ListItem(
+            info['title'],
+            iconImage=str(img),
+            thumbnailImage=str(img)
+        )
         if is_watched:
             info["playcount"] = 10
 
