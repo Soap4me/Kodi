@@ -45,42 +45,40 @@ profile = xbmc.translatePath(addon_profile)
 xbmcplugin.setPluginFanart(h, fanart)
 
 
-def soap_method(name):
-    def wrapper2(func):
-        def wrapper(*args, **kwargs):
-            print "Soap - (" + str(name) + ")"
-            return func(*args, **kwargs)
-        return wrapper
-    return wrapper2
-
 class SoapPlayer(xbmc.Player):
 
-    @soap_method("__init__")
     def __init__(self, *args):
         xbmc.Player.__init__(self, *args)
         self.is_start = False
         self.watched_time = False
+        self.total_time = False
+        self.callback = None
 
-    @soap_method("onPlayBackStarted")
+    def set_callback(self, callback):
+        self.callback = callback
+
     def onPlayBackStarted(self):
         """Will be called when xbmc starts playing a file."""
         self.is_start = True
 
-    @soap_method("onPlayBackEnded")
     def onPlayBackEnded(self):
         """Will be called when xbmc stops playing a file."""
-        print "Soap "+ str(self.watched_time) + "!"
+        if self.watched_time and self.total_time and self.callback is not None \
+                and self.watched_time > 0 and self.total_time > 0 \
+                and self.watched_time / self.total_time > 0.9:
+            self.callback()
 
-    @soap_method("onPlayBackStopped")
     def onPlayBackStopped(self):
         """Will be called when user stops xbmc playing a file."""
+        if self.watched_time and self.total_time and self.callback is not None \
+                and self.watched_time > 0 and self.total_time > 0 \
+                and self.watched_time / self.total_time > 0.9:
+            self.callback()
 
-    @soap_method("onPlayBackPaused")
     def onPlayBackPaused(self):
         """Will be called when user pauses a playing file."""
         pass
 
-    @soap_method("onPlayBackResumed")
     def onPlayBackResumed(self):
         """Will be called when user resumes a paused file."""
         pass
@@ -88,6 +86,7 @@ class SoapPlayer(xbmc.Player):
     def is_soap_play(self):
         try:
             self.watched_time = self.getTime()
+            self.total_time = self.getTotalTime()
         except:
             pass
         return not self.is_start or self.isPlaying()
@@ -306,7 +305,9 @@ def addon_main():
             data = [row for row in episodes_list if row['eid'] == parts[4]]
             if len(data) >= 1:
                 row = data[0]
+
                 p = SoapPlayer()
+                p.set_callback(lambda: s.mark_watched(row['eid']))
 
                 url = s.get_video(row)
                 img = season_img(row['season_id'])

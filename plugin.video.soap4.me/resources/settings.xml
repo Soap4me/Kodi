@@ -8,9 +8,10 @@
     <category label="Список видео">-->
         <setting label="Список видео" type="lsep" />
         <setting id="quality" type="enum" label="Качество видео по возможности" values="Все|SD|720p"/>
-        <setting id="sorting" type="enum" label="Сортировка" values="Сначала новые|Сначала старые" />
         <setting id="translate" type="enum" label="Перевод по возможности" values="Все|Субтитры|Голос"/>
-<!--        <setting label="Группировка" type="lsep" />
+        <setting id="sorting" type="enum" label="Сортировка" values="Сначала новые|Сначала старые" />
+
+        <!--        <setting label="Группировка" type="lsep" />
         <setting id="group_quality" type="bool" label="Группировать по качеству" default="false" />
         <setting id="group_translate" type="bool" label="Группировать по переводу" default="false" />
         <setting id="group_season" type="bool" label="Группировать по сезонам" default="true" /> -->

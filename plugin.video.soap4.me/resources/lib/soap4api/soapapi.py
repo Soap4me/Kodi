@@ -248,13 +248,25 @@ class SoapApi(object):
 
         return data
 
+    def mark_watched(self, eid):
+        self._load_token()
+
+        text = self._request(self.HOST + "/callback/", {
+            "what": "mark_watched",
+            "eid": str(eid),
+            "token": self.token
+        })
+        data = json.loads(text)
+
+        return isinstance(data, dict) and data.get('ok', 0) == 1
+
     def list_all(self):
         return self.list("all")
 
     def list_my(self):
         return self.list("my")
 
-    def list_episodes(self, row=None, sid=None):
+    def list_episodes(self, row=None, sid=None,):
         if sid is None and (row is None or 'sid' not in row):
             raise SoapException("Bad serial row.")
 
