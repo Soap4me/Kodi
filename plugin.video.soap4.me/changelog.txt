@@ -1,2 +1,6 @@
+v0.3.0
+- Fixing bugs
+- Add marks for episodes
+
 v0.2.0
 - Initial version

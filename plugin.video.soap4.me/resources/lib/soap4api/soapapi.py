@@ -156,6 +156,9 @@ class SoapApi(object):
 
         return text
 
+    def delete_token(self):
+        self._save_token({'token': '', 'till': 0})
+
     def _save_token(self, data):
         token_path = os.path.join(self.path, "token")
         with open(token_path, "w") as f:
@@ -245,6 +248,13 @@ class SoapApi(object):
 
         text = request()
         data = json.loads(text)
+
+        if isinstance(data, dict) \
+                and data.get('ok', 'None') == 0 \
+                and data.get('error', '') != '':
+            self.delete_token()
+            text = request()
+            data = json.loads(text)
 
         return data
 

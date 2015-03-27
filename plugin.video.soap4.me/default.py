@@ -274,7 +274,7 @@ def addon_main():
                     "",
                     season_img(row["season_id"]),
                     True,
-                    False
+                    all(ep[0]['watched'] is not None for ep in season_dict.values())
                 ))
 
             if len(rows) == 1:
