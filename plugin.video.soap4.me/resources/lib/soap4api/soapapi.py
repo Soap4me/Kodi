@@ -42,7 +42,7 @@ class SoapCache(object):
             return False
 
         max_time = time.time() - self.lifetime * 60
-        if self and os.path.getmtime(filename) <= max_time:
+        if use_lifetime and self and os.path.getmtime(filename) <= max_time:
             return False
 
         with open(filename, "r") as f:
@@ -272,7 +272,7 @@ class SoapApi(object):
 
     def time_position_get(self, eid):
         if self.cache:
-            pos = self.cache.get("pos_{0}".format(eid))
+            pos = self.cache.get("pos_{0}".format(eid), use_lifetime=False)
             if pos is False or pos is "":
                 return
 

@@ -5,7 +5,7 @@
 import xbmc, xbmcgui, xbmcplugin, xbmcaddon
 import urllib, os, sys
 
-__settings__ = xbmcaddon.Addon(id='plugin.video.soap4me')
+__settings__ = xbmcaddon.Addon(id='plugin.video.soap4.me')
 sys.path.append(os.path.join(__settings__.getAddonInfo('path').replace(';', ''), 'resources', 'lib'))
 try:
     from soap4api.soapapi import SoapApi, SoapException
@@ -27,7 +27,7 @@ from collections import defaultdict
 
 h = int(sys.argv[1])
 
-__addon__ = xbmcaddon.Addon(id = 'plugin.video.soap4me')
+__addon__ = xbmcaddon.Addon(id = 'plugin.video.soap4.me')
 
 addon_icon      = __addon__.getAddonInfo('icon')
 addon_fanart  = __addon__.getAddonInfo('fanart')
