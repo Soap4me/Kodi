@@ -171,6 +171,9 @@ class SoapApi(object):
             if not os.path.exists(token_path):
                 return False
 
+            if os.path.getmtime(token_path) + 86400 * 7 < time.time():
+                return False
+
             with open(token_path, "r") as f:
                 dump = f.read()
                 data = json.loads(dump)
@@ -186,6 +189,7 @@ class SoapApi(object):
             if from_login or self.auth is None:
                 raise SoapException("Bad authorization. Token process.")
 
+            self.delete_token()
             self.login()
 
     @classmethod

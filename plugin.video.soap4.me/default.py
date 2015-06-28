@@ -52,10 +52,12 @@ class SoapPlayer(xbmc.Player):
         self.is_start = False
         self.watched_time = False
         self.total_time = False
-        self.callback = None
+        self.end_callback = None
+        self.stop_callback = None
 
-    def set_callback(self, callback):
-        self.callback = callback
+    def set_callback(self, end_callback=None, stop_callback=None):
+        self.end_callback = end_callback
+        self.stop_callback = stop_callback
 
     def onPlayBackStarted(self):
         """Will be called when xbmc starts playing a file."""
@@ -63,17 +65,17 @@ class SoapPlayer(xbmc.Player):
 
     def onPlayBackEnded(self):
         """Will be called when xbmc stops playing a file."""
-        if self.watched_time and self.total_time and self.callback is not None \
+        if self.watched_time and self.total_time and self.end_callback is not None \
                 and self.watched_time > 0 and self.total_time > 0 \
                 and self.watched_time / self.total_time > 0.9:
-            self.callback()
+            self.end_callback()
 
     def onPlayBackStopped(self):
         """Will be called when user stops xbmc playing a file."""
-        if self.watched_time and self.total_time and self.callback is not None \
+        if self.watched_time and self.total_time and self.end_callback is not None \
                 and self.watched_time > 0 and self.total_time > 0 \
                 and self.watched_time / self.total_time > 0.9:
-            self.callback()
+            self.end_callback()
 
     def onPlayBackPaused(self):
         """Will be called when user pauses a playing file."""
@@ -306,8 +308,15 @@ def addon_main():
             if len(data) >= 1:
                 row = data[0]
 
+                dialog = xbmcgui.Dialog()
+                ret = dialog.select('Choose a playlist', ['Playlist #1', 'Playlist #2', 'Playlist #3'])
+
                 p = SoapPlayer()
-                p.set_callback(lambda: s.mark_watched(row['eid']))
+
+                p.set_callback(
+                    end_callback=lambda: s.mark_watched(row['eid']),
+                    stop_callback=lambda stop_time: stop_time
+                )
 
                 url = s.get_video(row)
                 img = season_img(row['season_id'])
