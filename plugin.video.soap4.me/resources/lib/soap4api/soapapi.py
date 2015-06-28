@@ -36,13 +36,13 @@ class SoapCache(object):
 
         self.lifetime = lifetime
 
-    def get(self, cache_id):
+    def get(self, cache_id, use_lifetime=True):
         filename = os.path.join(self.path, str(cache_id))
         if not os.path.exists(filename) or not os.path.isfile(filename):
             return False
 
         max_time = time.time() - self.lifetime * 60
-        if os.path.getmtime(filename) <= max_time:
+        if self and os.path.getmtime(filename) <= max_time:
             return False
 
         with open(filename, "r") as f:
@@ -261,6 +261,22 @@ class SoapApi(object):
             data = json.loads(text)
 
         return data
+
+    def time_position_save(self, eid, position):
+        if self.cache:
+            self.cache.set("pos_{0}".format(eid), position)
+
+    def time_position_delete(self, eid):
+        if self.cache:
+            self.cache.set("pos_{0}".format(eid), "")
+
+    def time_position_get(self, eid):
+        if self.cache:
+            pos = self.cache.get("pos_{0}".format(eid))
+            if pos is False or pos is "":
+                return
+
+            return pos
 
     def mark_watched(self, eid):
         self._load_token()

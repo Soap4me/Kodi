@@ -45,6 +45,13 @@ profile = xbmc.translatePath(addon_profile)
 xbmcplugin.setPluginFanart(h, fanart)
 
 
+def get_time(sec):
+    sec = int(sec)
+    min = sec // 60
+    sec = sec % 60
+
+    return "%02d:%02d" %(min, sec)
+
 class SoapPlayer(xbmc.Player):
 
     def __init__(self, *args):
@@ -54,10 +61,12 @@ class SoapPlayer(xbmc.Player):
         self.total_time = False
         self.end_callback = None
         self.stop_callback = None
+        self.ontime_callback = None
 
-    def set_callback(self, end_callback=None, stop_callback=None):
+    def set_callback(self, end_callback=None, stop_callback=None, ontime_callback=None):
         self.end_callback = end_callback
         self.stop_callback = stop_callback
+        self.ontime_callback = ontime_callback
 
     def onPlayBackStarted(self):
         """Will be called when xbmc starts playing a file."""
@@ -89,6 +98,9 @@ class SoapPlayer(xbmc.Player):
         try:
             self.watched_time = self.getTime()
             self.total_time = self.getTotalTime()
+
+            if self.ontime_callback is not None:
+                self.ontime_callback(self.watched_time)
         except:
             pass
         return not self.is_start or self.isPlaying()
@@ -308,27 +320,46 @@ def addon_main():
             if len(data) >= 1:
                 row = data[0]
 
-                dialog = xbmcgui.Dialog()
-                ret = dialog.select('Choose a playlist', ['Playlist #1', 'Playlist #2', 'Playlist #3'])
+                pos = s.time_position_get(row['eid'])
 
-                p = SoapPlayer()
+                if pos is not None:
+                    dialog = xbmcgui.Dialog()
+                    ret = dialog.select(u'Воспроизвести', [u'С {0}'.format(get_time(float(pos))), u'Сначала'])
 
-                p.set_callback(
-                    end_callback=lambda: s.mark_watched(row['eid']),
-                    stop_callback=lambda stop_time: stop_time
-                )
+                    if ret == -1:
+                        pos = None
+                    elif ret == 0:
+                        pos = float(pos)
+                    else:
+                        pos = 0.
+                else:
+                    pos = 0.
 
-                url = s.get_video(row)
-                img = season_img(row['season_id'])
-                title = title_episode(row)
+                if pos is not None:
+                    p = SoapPlayer()
+
+                    def ontime_callback(watched_time):
+                        s.time_position_save(row['eid'], "{0}".format(watched_time))
 
 
-                li = xbmcgui.ListItem(title, iconImage=img, thumbnailImage=img)
-                p.play(url, li)
-                while p.is_soap_play() and not xbmc.abortRequested:
-                    xbmc.sleep(1000)
+                    p.set_callback(
+                        end_callback=lambda: s.mark_watched(row['eid']),
+                        stop_callback=ontime_callback,
+                        ontime_callback=ontime_callback
+                    )
 
-                return
+                    url = s.get_video(row)
+                    img = season_img(row['season_id'])
+                    title = title_episode(row)
+
+
+                    li = xbmcgui.ListItem(title, iconImage=img, thumbnailImage=img)
+                    li.setProperty('StartOffset', str(pos))
+                    p.play(url, li)
+                    while p.is_soap_play() and not xbmc.abortRequested:
+                        xbmc.sleep(1000)
+
+                    return
             parts = parts[:4]
 
     kodi_draw_list(parts, rows)
