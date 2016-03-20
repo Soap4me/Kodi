@@ -24,6 +24,7 @@ except:
     import simplejson as json
 
 
+
 class SoapException(Exception):
     pass
 

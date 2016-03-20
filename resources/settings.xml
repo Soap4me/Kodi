@@ -16,4 +16,9 @@
         <setting id="group_translate" type="bool" label="Группировать по переводу" default="false" />
         <setting id="group_season" type="bool" label="Группировать по сезонам" default="true" /> -->
     </category>
+    <category label="Параметры">
+        <setting label="Параметры воспроизведения" type="lsep" />
+        <setting id="audio" type="select" label="Предпочитаемая аудиодорожка" values="По-умолчанию|Перевод|Оригинал"/>
+        <setting id="audio" type="select" label="Предпочитаемые субтитры" values="По-умолчанию|Перевод|Оригинал|Выключить"/>
+    </category>
 </settings>
