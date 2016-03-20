@@ -18,7 +18,10 @@
     </category>
     <category label="Параметры">
         <setting label="Параметры воспроизведения" type="lsep" />
-        <setting id="audio" type="select" label="Предпочитаемая аудиодорожка" values="По-умолчанию|Перевод|Оригинал"/>
-        <setting id="audio" type="select" label="Предпочитаемые субтитры" values="По-умолчанию|Перевод|Оригинал|Выключить"/>
+        <setting id="audio" type="enum" label="Предпочитаемая аудиодорожка" values="По-умолчанию|Перевод|Оригинал"/>
+        <setting id="subtitle" type="enum" label="Предпочитаемые субтитры" values="По-умолчанию|Перевод|Оригинал|Выключить"/>
+
+        <setting label="Прочее" type="lsep" />
+        <setting label="Стереть кеши" type="action" action="RunScript(plugin.video.soap4.me, clearcache)"/>
     </category>
 </settings>

@@ -6,9 +6,8 @@ import xbmc, xbmcgui, xbmcplugin, xbmcaddon
 import urllib, os, sys
 
 __settings__ = xbmcaddon.Addon(id='plugin.video.soap4.me')
-sys.path.append(os.path.join(__settings__.getAddonInfo('path').replace(';', ''), 'resources', 'lib'))
 
-DEBUG = True
+DEBUG = False
 
 if DEBUG:
     sys.path.append('/Users/ufian/tests/soap4me/debug-eggs/pycharm-debug')
@@ -36,8 +35,8 @@ import cookielib
 import gzip
 import json
 import StringIO
+import shutil
 
-h = int(sys.argv[1])
 
 __addon__ = xbmcaddon.Addon(id = 'plugin.video.soap4.me')
 
@@ -54,6 +53,33 @@ addon_profile = __addon__.getAddonInfo('profile')
 icon   = xbmc.translatePath(addon_icon)
 fanart = xbmc.translatePath(addon_fanart)
 profile = xbmc.translatePath(addon_profile)
+
+if getattr(xbmcgui.Dialog, 'notification', False):
+    def message_ok(message):
+        xbmcgui.Dialog().notification("Soap4.me", message, icon=xbmcgui.NOTIFICATION_INFO, sound=False)
+
+    def message_error(message):
+        xbmcgui.Dialog().notification("Soap4.me", message, icon=xbmcgui.NOTIFICATION_ERROR, sound=False)
+else:
+    def show_message(message):
+        xbmc.executebuiltin('XBMC.Notification("%s", "%s", %s, "%s")'%("Soap4.me", message, 3000, icon))
+
+    message_ok = show_message
+    message_error = show_message
+
+soappath = os.path.join(profile, "soap4me")
+
+if sys.argv[1] == 'clearcache':
+    if os.path.exists(soappath):
+        shutil.rmtree(soappath)
+    __addon__.setSetting('_token', '0')
+    __addon__.setSetting('_token_valid', '0')
+    __addon__.setSetting('_token_till', '0')
+    __addon__.setSetting('_message_till_days', '0')
+    message_ok('Done')
+    exit(0)
+
+h = int(sys.argv[1])
 xbmcplugin.setPluginFanart(h, fanart)
 
 
@@ -70,7 +96,7 @@ def get_time(sec):
 class SoapPlayer(xbmc.Player):
 
     def __init__(self, *args, **kwargs):
-        super(SoapPlayer, self)(*args, **kwargs)
+        super(SoapPlayer, self).__init__(*args, **kwargs)
         self.is_start = False
         self.watched_time = False
         self.total_time = False
@@ -78,7 +104,8 @@ class SoapPlayer(xbmc.Player):
         self.stop_callback = None
         self.ontime_callback = None
 
-    def set_callback(self, end_callback=None, stop_callback=None, ontime_callback=None):
+    def set_callback(self, play_callback, end_callback=None, stop_callback=None, ontime_callback=None):
+        self.play_callback = play_callback
         self.end_callback = end_callback
         self.stop_callback = stop_callback
         self.ontime_callback = ontime_callback
@@ -86,6 +113,7 @@ class SoapPlayer(xbmc.Player):
     def onPlayBackStarted(self):
         """Will be called when xbmc starts playing a file."""
         self.is_start = True
+        self.play_callback(self)
         return super(SoapPlayer, self).onPlayBackStarted()
 
     def onPlayBackEnded(self):
@@ -132,7 +160,7 @@ class SoapVideo(object):
         self.li = li
         self.url = url
         self.cb_watched = cb_watched
-        self.cache = SoapCache(os.path.join(profile, "soap4me"), 15)
+        self.cache = SoapCache(soappath, 15)
 
     def set_pos(self, position):
         self.cache.set("pos_{0}".format(self.eid), "{0}".format(position))
@@ -160,8 +188,42 @@ class SoapVideo(object):
 
         p = SoapPlayer()
 
+        def play_callback(player):
+            # 0 - default, 1 - translate, 2 - original
+            audio = str(__addon__.getSetting('audio'))
+            audios = player.getAvailableAudioStreams()
+            if len(audios) > 1 and audio != '0':
+                result = dict()
+                for i, lang in enumerate(audios):
+                    if 'rus' in lang.lower():
+                        result['rus'] = i
+                    elif 'eng' in lang.lower():
+                        result['eng'] = i
+
+                if audio == '1' and 'rus' in result:
+                    player.setAudioStream(result['rus'])
+                if audio == '2' and 'eng' in result:
+                    player.setAudioStream(result['eng'])
+
+                # 0 - default, 1 - translate, 2 - original, 3 - off
+
+            subtitle = str(__addon__.getSetting('subtitle'))
+            subtitles = player.getAvailableSubtitleStreams()
+            if len(subtitles) > 1 and subtitle != '0':
+                result = dict()
+                for i, lang in enumerate(subtitles):
+                    if 'rus' in lang.lower():
+                        result['rus'] = i
+                    elif 'eng' in lang.lower():
+                        result['eng'] = i
+
+                if subtitle == '1' and 'rus' in result:
+                    player.setSubtitleStream(result['rus'])
+                if subtitle == '2' and 'eng' in result:
+                    player.setSubtitleStream(result['eng'])
 
         p.set_callback(
+            play_callback=play_callback,
             end_callback=lambda: s.mark_watched(row['eid']),
             stop_callback=self.set_pos,
             ontime_callback=self.set_pos
@@ -174,18 +236,6 @@ class SoapVideo(object):
 
         return
 
-if getattr(xbmcgui.Dialog, 'notification', False):
-    def message_ok(message):
-        xbmcgui.Dialog().notification("Soap4.me", message, icon=xbmcgui.NOTIFICATION_INFO, sound=False)
-
-    def message_error(message):
-        xbmcgui.Dialog().notification("Soap4.me", message, icon=xbmcgui.NOTIFICATION_ERROR, sound=False)
-else:
-    def show_message(message):
-        xbmc.executebuiltin('XBMC.Notification("%s", "%s", %s, "%s")'%("Soap4.me", message, 3000, icon))
-
-    message_ok = show_message
-    message_error = show_message
 
 
 def kodi_get_auth():
@@ -237,39 +287,58 @@ class SoapCookies(object):
     def __init__(self):
         self.CJ = cookielib.CookieJar()
         self._cookies = None
+        self.path = soappath
 
     def _cookies_init(self):
+        if self.CJ is None:
+            return
+
         urllib2.install_opener(
             urllib2.build_opener(
                 urllib2.HTTPCookieProcessor(self.CJ)
             )
         )
 
-    def _cookies_load(self, req):
-        cookie_send = {}
-        cookies_json = __addon__.getSetting('_cookies')
-        if cookies_json != '':
-            cookie_send = json.loads(cookies_json)
+        self.cookie_path = os.path.join(self.path, 'cookies')
+        if not os.path.exists(self.cookie_path):
+            os.makedirs(self.cookie_path)
+            # print '[%s]: os.makedirs(cookie_path=%s)' % (addon_id, cookie_path)
 
-        self._cookies = cookie_send
+    def _cookies_load(self, req):
+        if self.CJ is None:
+            return
+
+        cookie_send = {}
+        for cookie_fname in os.listdir(self.cookie_path):
+            cookie_file = os.path.join(self.cookie_path, cookie_fname)
+            if os.path.isfile(cookie_file):
+                cf = open(cookie_file, 'r')
+                cookie_send[os.path.basename(cookie_file)] = cf.read()
+                cf.close()
+                # else: print '[%s]: NOT os.path.isfile(cookie_file=%s)' % (addon_id, cookie_file)
 
         cookie_string = urllib.urlencode(cookie_send).replace('&', '; ')
         req.add_header('Cookie', cookie_string)
 
     def _cookies_save(self):
-        cookies = dict((cookie.name, cookie.value) for cookie in self.CJ)
-        self._cookies.update(cookies)
-        __addon__.setSetting('_cookies', json.dumps(self._cookies))
+        if self.CJ is None:
+            return
 
+        for Cook in self.CJ:
+            cookie_file = os.path.join(self.cookie_path, Cook.name)
+            cf = open(cookie_file, 'w')
+            cf.write(Cook.value)
+            cf.close()
 
 class SoapBase(SoapCookies):
     HOST = 'http://soap4.me'
 
     def __init__(self):
+        skip_settings = not os.path.exists(soappath)
         self.token = None
         self.token_till = None
         SoapCookies.__init__(self)
-        self.is_auth = self.init_token()
+        self.is_auth = self.init_token(skip_settings)
 
     def _load_token(self):
         token = __addon__.getSetting('_token')
@@ -378,7 +447,6 @@ def getSoapConfig():
         config['translate'] = lambda row: row['translate'].strip().encode("utf-8") == "Субтитры"
     elif str(__addon__.getSetting('translate')) == "2":
         config['translate'] = lambda row: row['translate'].strip().encode("utf-8") != "Субтитры"
-
     return config
 
 
@@ -406,7 +474,7 @@ class SoapApi(object):
     def __init__(self):
         self.base = SoapBase()
         self.config = getSoapConfig()
-        self.cache = SoapCache(os.path.join(profile, "soap4me"), 15)
+        self.cache = SoapCache(soappath, 15)
 
     @property
     def is_auth(self):
@@ -570,11 +638,14 @@ class SoapApi(object):
         url = "/callback/"
         result = self.base.request(url, data)
 
+        if result == '':
+            result = '{}'
+
         data = json.loads(result)
         if not isinstance(data, dict) or data.get("ok", 0) == 0:
             raise SoapException("Bad getting videolink")
 
-        return "http://%s.soap4.me/%s/%s/%s/" % (data['server'], self.token, eid, myhash)
+        return "http://%s.soap4.me/%s/%s/%s/" % (data['server'], self.base.token, eid, myhash)
 
 
     def get_video(self, row):
