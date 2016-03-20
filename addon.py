@@ -221,6 +221,8 @@ class SoapVideo(object):
                     player.setSubtitleStream(result['rus'])
                 if subtitle == '2' and 'eng' in result:
                     player.setSubtitleStream(result['eng'])
+                if subtitle == 3:
+                    player.disableSubtitles()
 
         p.set_callback(
             play_callback=play_callback,
