@@ -13,12 +13,6 @@ if DEBUG:
     sys.path.append('/Users/ufian/tests/soap4me/debug-eggs/pycharm-debug')
 
 try:
-    from soap4api.soapapi import SoapApi
-except ImportError:
-    from resources.lib.soap4api.soapapi import SoapApi
-import time
-
-try:
     import json
 except:
     import simplejson as json
@@ -36,6 +30,7 @@ import gzip
 import json
 import StringIO
 import shutil
+import time
 
 
 __addon__ = xbmcaddon.Addon(id = 'plugin.video.soap4.me')
@@ -226,7 +221,7 @@ class SoapVideo(object):
 
         p.set_callback(
             play_callback=play_callback,
-            end_callback=lambda: s.mark_watched(row['eid']),
+            end_callback=self.cb_watched,
             stop_callback=self.set_pos,
             ontime_callback=self.set_pos
         )
