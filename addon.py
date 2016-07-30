@@ -5,6 +5,7 @@
 import xbmc, xbmcgui, xbmcplugin, xbmcaddon
 import urllib, os, sys
 
+__version__ = '1.0.0'
 __settings__ = xbmcaddon.Addon(id='plugin.video.soap4.me')
 
 DEBUG = False
@@ -31,7 +32,6 @@ import json
 import StringIO
 import shutil
 import time
-
 
 __addon__ = xbmcaddon.Addon(id = 'plugin.video.soap4.me')
 
@@ -327,20 +327,150 @@ class SoapCookies(object):
             cf.write(Cook.value)
             cf.close()
 
+
+class SoapHttpClient(SoapCookies):
+    HOST = 'https://api.soap4.me/v2'
+    
+    def __init__(self):
+        self.token = None
+        SoapCookies.__init__(self)
+        
+    def set_token(self, token):
+        self.token = token
+     
+    def _post_data(self, params=None):
+        if not isinstance(params, dict):
+            return None
+       
+        return urllib.urlencode(params)
+        
+    def request(self, url, params=None):
+        self._cookies_init()
+
+        req = urllib2.Request(self.HOST + url)
+        req.add_header('User-Agent', 'Kodi: plugin.soap4me v{0}'.format(__version__))
+        req.add_header('Accept-encoding', 'gzip')
+
+        if self.token is not None:
+            req.add_header('X-API-TOKEN', self.token)
+
+        post_data = self._post_data(params)
+        if params is not None:
+            req.add_header('Content-Type', 'application/x-www-form-urlencoded')
+
+        response = urllib2.urlopen(req, post_data)
+
+        self._cookies_save()
+
+        text = None
+        if response.info().get('Content-Encoding') == 'gzip':
+            buffer = StringIO.StringIO(response.read())
+            fstream = gzip.GzipFile(fileobj=buffer)
+            text = fstream.read()
+        else:
+            text = response.read()
+            response.close()
+        
+        try:
+            return json.loads(text)
+        except:
+            return text
+
+
+class KodiConfig(object):
+    
+    @classmethod
+    def soap_get_auth(cls):
+        to_int = lambda s: int(s) if s != '' else 0
+        return {
+            'token': __addon__.getSetting('_token'),
+            'token_till': to_int(__addon__.getSetting('_token_till')),
+            'token_valid': to_int(__addon__.getSetting('_token_valid')),
+            'message_till_days': to_int(__addon__.getSetting('_message_till_days'))
+        }
+    
+    @classmethod
+    def soap_set_auth(cls, params):
+        __addon__.setSetting('_token', params.get('token', ''))
+        __addon__.setSetting('_token_till', str(params.get('till', 0)))
+        __addon__.setSetting('_message_till_days', '')
+        cls.soap_set_token_valid()
+        
+    @classmethod
+    def soap_set_token_valid(cls):
+        __addon__.setSetting('_token_valid', str(int(time.time()) + 86400 * 7))
+    
+    @classmethod
+    def kodi_get_auth(cls):
+        username = __addon__.getSetting('username')
+        password = __addon__.getSetting('password')
+    
+        while len(username) == 0 or len(password) == 0:
+            __addon__.openSettings()
+            username = __addon__.getSetting('username')
+            password = __addon__.getSetting('password')
+    
+        return {
+            'login': username,
+            'password': password
+        }
+    
+    
+class SoapAuth(object):
+    AUTH_URL = '/auth/'
+    
+    def __init__(self, client):
+        self.client = client
+        self.is_auth = False
+
+    def login(self):
+        data = self.client.request(self.AUTH_URL, KodiConfig.kodi_get_auth())
+
+        if not isinstance(data, dict) or data.get('ok') != 1:
+            message_error("Login or password are incorrect")
+            return False
+
+        KodiConfig.soap_set_auth(data)
+        return True
+        
+    def check(self):
+        params = KodiConfig.soap_get_auth()
+
+        if params['token'] == '':
+            return False
+
+        if params['token_valid'] < time.time():
+            return False
+
+        if params['token_till'] + 10 < time.time():
+            return False
+        
+    def auth(self):
+        if not self.check():
+            if not self.login():
+                return False
+            
+        params = KodiConfig.soap_get_auth()
+        if not params['token']:
+            message_error("Auth error")
+            return False
+        
+        self.client.set_token(params['token'])
+        self.is_auth = True
+        
+
 class SoapBase(SoapCookies):
-    HOST = 'http://soap4.me'
+    HOST = 'https://api.soap4.me/v2'
 
     def __init__(self):
         skip_settings = not os.path.exists(soappath)
-        self.token = None
-        self.token_till = None
         SoapCookies.__init__(self)
         self.is_auth = self.init_token(skip_settings)
 
     def _load_token(self):
         token = __addon__.getSetting('_token')
 
-        to_int = lambda s: int(s) if s != '' else 0
+        
 
         valid_time = to_int(__addon__.getSetting('_token_valid'))
         till = to_int(__addon__.getSetting('_token_till'))
@@ -358,10 +488,6 @@ class SoapBase(SoapCookies):
         return True
 
     def _save_token(self, data):
-        __addon__.setSetting('_token', data.get('token', ''))
-        __addon__.setSetting('_token_valid', str(int(time.time()) + 86400 * 7))
-        __addon__.setSetting('_token_till', str(data.get('till', 0)))
-        __addon__.setSetting('_message_till_days', '')
 
     def init_token(self, skip_loading=False):
         if not skip_loading and self._load_token():
@@ -370,7 +496,7 @@ class SoapBase(SoapCookies):
         username, password = kodi_get_auth()
 
         text = self.request(
-            "/login/",
+            "/auth/",
             params = {"login": username, "password": password},
             use_token = False
         )
@@ -396,9 +522,8 @@ class SoapBase(SoapCookies):
         self._cookies_init()
 
         req = urllib2.Request(self.HOST + url)
-        req.add_header('User-Agent', 'xbmc for soap')
+        req.add_header('User-Agent', 'Kodi: plugin.soap4me v{0}'.format(__version__))
         req.add_header('Accept-encoding', 'gzip')
-        req.add_header('x-im-raspberry', 'yes')
 
 
         post_data = None
@@ -409,7 +534,7 @@ class SoapBase(SoapCookies):
         if use_token:
             self._cookies_load(req)
             if self.token is not None:
-                req.add_header('x-api-token', self.token)
+                req.add_header('X-API-TOKEN', self.token)
 
         response = urllib2.urlopen(req, post_data)
 
@@ -467,15 +592,27 @@ def title_episode(row):
     )
 
 
+class SoapSerial(object):
+    def __init__(self, sid, serial_data=None, episodes_data=None):
+        self.sid = sid
+        self.serial_data = serial_data
+        self.episodes_data = episodes_data
+
 class SoapApi(object):
+    FULL_LIST_URL = '/soap/'
+    MY_LIST_URL = '/my/'
+    EPISODES_URL = '/episodes/{0}/'
+    
     def __init__(self):
-        self.base = SoapBase()
+        self.client = SoapHttpClient()
+        self.auth = SoapAuth(self.client)
         self.config = getSoapConfig()
-        self.cache = SoapCache(soappath, 15)
+
+        self.auth.auth()
 
     @property
     def is_auth(self):
-        return self.base.is_auth
+        return self.auth.is_auth
 
     def main(self):
         mtd = __addon__.getSetting('_message_till_days')
@@ -489,60 +626,39 @@ class SoapApi(object):
             ("all", "Все сериалы", "", None, True, False)
         ]
 
-    def cached_request(self, url):
-        text = self.cache.get(url)
-        if text:
-            return text
-
-        text = self.base.request(url)
-        self.cache.set(url, text)
-
-        return text
-
     def get_list(self, sid):
         if sid == 'my':
-            url = "/api/soap/my/"
+            url = self.MY_LIST_URL
         elif sid == 'all':
-            url = "/api/soap/"
+            url = self.FULL_LIST_URL
         else:
-            url = "/api/episodes/{0}/".format(sid)
+            url = self.EPISODES_URL.format(sid)
 
         def _request():
-            text = self.cached_request(url)
-            data = json.loads(text)
+            data = self.client.request(url)
 
             if isinstance(data, dict) \
                     and data.get('ok', 'None') == 0 \
                     and data.get('error', '') != '':
-                self.cache.rm(url)
+                # self.cache.rm(url)
                 return False
             return data
 
         data = _request()
         if not data:
-            self.base.init_token(True)
+            self.auth.auth()
             data = _request()
             if not data:
-                self.cache.rm(url)
+                #self.cache.rm(url)
                 raise Exception('Error with request')
 
         return data
 
     def get_serials(self, type):
-
-        lines = self.get_list(type)
-
-        rows = list()
-        for row in lines:
-            rows.append((
-                row['sid'],
-                row['title'],
-                row['description'].encode('utf-8'),
-                serial_img(row['sid']),
-                True,
-                False
-            ))
-        return rows
+        return [
+            SoapSerial(row['sid'], serial_data=row)
+            for row in self.get_list(type)
+        ]
 
     def get_all_episodes(self, sid):
         data = defaultdict(lambda: defaultdict(list))
