@@ -235,19 +235,6 @@ class SoapVideo(object):
         return
 
 
-
-def kodi_get_auth():
-    username = __addon__.getSetting('username')
-    password = __addon__.getSetting('password')
-
-    while len(username) == 0 or len(password) == 0:
-        __addon__.openSettings()
-        username = __addon__.getSetting('username')
-        password = __addon__.getSetting('password')
-
-    return username, password
-
-
 class SoapCache(object):
     def __init__(self, path, lifetime=30):
         self.path = os.path.join(path, "cache")
@@ -334,6 +321,7 @@ class SoapHttpClient(SoapCookies):
     
     def __init__(self):
         self.token = None
+        self.cache = SoapCache(soappath, 5)
         SoapCookies.__init__(self)
         
     def set_token(self, token):
@@ -344,8 +332,8 @@ class SoapHttpClient(SoapCookies):
             return None
        
         return urllib.urlencode(params)
-        
-    def request(self, url, params=None):
+
+    def _request(self, url, params=None):
         self._cookies_init()
 
         req = urllib2.Request(self.HOST + url)
@@ -371,18 +359,33 @@ class SoapHttpClient(SoapCookies):
         else:
             text = response.read()
             response.close()
+            
+        return text
         
+    def request(self, url, params=None, use_cache=False):
+        text = None
+        if use_cache:
+            text = self.cache.get(url)
+        
+        if text is None or not text :
+            text = self._request(url, params)
+            
+            if use_cache:
+                self.cache.set(url, text)
+
         try:
             return json.loads(text)
         except:
             return text
+        
+    def clean(self, url):
+        self.cache.rm(url)
 
-
+to_int = lambda s: int(s) if s != '' else 0
 class KodiConfig(object):
-    
     @classmethod
     def soap_get_auth(cls):
-        to_int = lambda s: int(s) if s != '' else 0
+        
         return {
             'token': __addon__.getSetting('_token'),
             'token_till': to_int(__addon__.getSetting('_token_till')),
@@ -402,6 +405,15 @@ class KodiConfig(object):
         __addon__.setSetting('_token_valid', str(int(time.time()) + 86400 * 7))
     
     @classmethod
+    def message_till_days(cls):
+        mtd = __addon__.getSetting('_message_till_days')
+        if mtd == '' or int(mtd) < time.time():
+            __addon__.setSetting('_message_till_days', str(int(time.time()) + 43200))
+            till = to_int(__addon__.getSetting('_token_till'))
+            if till != 0:
+                message_ok("Осталось {0} дней".format(int(till - time.time()) / 86400))
+
+    @classmethod
     def kodi_get_auth(cls):
         username = __addon__.getSetting('username')
         password = __addon__.getSetting('password')
@@ -419,6 +431,7 @@ class KodiConfig(object):
     
 class SoapAuth(object):
     AUTH_URL = '/auth/'
+    CHECK_URL = '/auth/check/'
     
     def __init__(self, client):
         self.client = client
@@ -446,6 +459,13 @@ class SoapAuth(object):
         if params['token_till'] + 10 < time.time():
             return False
         
+        self.client.set_token(params['token'])
+        data = self.client.request(self.CHECK_URL)
+        if isinstance(data, dict) and data.get('loged') == 1:
+            return True
+
+        return False
+        
     def auth(self):
         if not self.check():
             if not self.login():
@@ -455,102 +475,10 @@ class SoapAuth(object):
         if not params['token']:
             message_error("Auth error")
             return False
-        
+                
         self.client.set_token(params['token'])
         self.is_auth = True
         
-
-# class SoapBase(SoapCookies):
-#     HOST = 'https://api.soap4.me/v2'
-#
-#     def __init__(self):
-#         skip_settings = not os.path.exists(soappath)
-#         SoapCookies.__init__(self)
-#         self.is_auth = self.init_token(skip_settings)
-#
-#     def _load_token(self):
-#         token = __addon__.getSetting('_token')
-#
-#
-#
-#         valid_time = to_int(__addon__.getSetting('_token_valid'))
-#         till = to_int(__addon__.getSetting('_token_till'))
-#         if token == '':
-#             return False
-#
-#         if valid_time < time.time():
-#             return False
-#
-#         if till + 10 < time.time():
-#             return False
-#
-#         self.token = token
-#         self.token_till = int(till - time.time()) / 86400
-#         return True
-#
-#     def _save_token(self, data):
-#
-#     def init_token(self, skip_loading=False):
-#         if not skip_loading and self._load_token():
-#             return True
-#
-#         username, password = kodi_get_auth()
-#
-#         text = self.request(
-#             "/auth/",
-#             params = {"login": username, "password": password},
-#             use_token = False
-#         )
-#         data = json.loads(text)
-#
-#         if not isinstance(data, dict) or data.get('ok') != 1:
-#             message_error("Login or password are incorrect")
-#             return False
-#
-#         self._save_token(data)
-#
-#         if not self._load_token():
-#             message_error("Auth error")
-#             return False
-#
-#         return True
-#
-#
-#     def request(self, url, params=None, use_token=True):
-#         if not isinstance(params, dict):
-#             params = None
-#
-#         self._cookies_init()
-#
-#         req = urllib2.Request(self.HOST + url)
-#         req.add_header('User-Agent', 'Kodi: plugin.soap4me v{0}'.format(__version__))
-#         req.add_header('Accept-encoding', 'gzip')
-#
-#
-#         post_data = None
-#         if params is not None:
-#             req.add_header('Content-Type', 'application/x-www-form-urlencoded')
-#             post_data = urllib.urlencode(params)
-#
-#         if use_token:
-#             self._cookies_load(req)
-#             if self.token is not None:
-#                 req.add_header('X-API-TOKEN', self.token)
-#
-#         response = urllib2.urlopen(req, post_data)
-#
-#         self._cookies_save()
-#
-#         text = None
-#         if response.info().get('Content-Encoding') == 'gzip':
-#             buffer = StringIO.StringIO(response.read())
-#             fstream = gzip.GzipFile(fileobj=buffer)
-#             text = fstream.read()
-#         else:
-#             text = response.read()
-#             response.close()
-#
-#         return text
 
 def getSoapConfig():
     config = dict()
@@ -583,15 +511,6 @@ def season_img(season_id):
         return None
     return "http://covers.s4me.ru/season/big/{0}.jpg".format(season_id)
 
-def title_episode(row):
-    return "S{season}E{episode} | {quality} | {translate} | {title}".format(
-        season=str(row['season']),
-        episode=str(row['episode']),
-        quality=row['quality'].encode('utf-8'),
-        translate=row['translate'].encode('utf-8'),
-        title=row['title_en'].encode('utf-8').replace('&#039;', "'").replace("&amp;", "&").replace('&quot;','"'),
-    )
-
 
 class MenuRow(object):
     __slots__ = ('uri', 'title', 'description', 'img', 'is_folter', 'is_watched')
@@ -606,13 +525,14 @@ class MenuRow(object):
 
     def item(self, parts):
         info = {}
-        info['title'] = self.title
+        info['label'] = self.title
         info['plot'] = self.description or ''
 
         vtype = 'video'
 
         li = xbmcgui.ListItem(
-            info['title'],
+            label=self.title,
+            
             iconImage=str(self.img),
             thumbnailImage=str(self.img)
         )
@@ -625,6 +545,14 @@ class MenuRow(object):
         #print "Soap: " + ruri
         return h, ruri, li, bool(self.is_folter)
 
+    @staticmethod
+    def get_new(count):
+        if count > 0:
+            return "  [COLOR=AAAAAAAA][LIGHT]({0})[/LIGHT][/COLOR]".format(count)
+        else:
+            return ""
+
+
 class SoapSerial(object):
     def __init__(self, sid, data=None):
         self.sid = sid
@@ -632,34 +560,34 @@ class SoapSerial(object):
         
     def menu(self):
         # TODO Use english/russian
-        return MenuRow(self.sid, self.data['title'], is_folter=True)
+        title = self.data['title']
+        if self.data.get('unwatched', 0) > 0:
+            title += MenuRow.get_new(self.data['unwatched'])
+        
+        return MenuRow(
+            self.sid,
+            title,
+            self.data.get('description'),
+            img=self.data['covers']['big'],
+            is_folter=True
+        )
 
 class SoapEpisodes(object):
-    def __init__(self, sid, lines=None):
+    def __init__(self, sid, data=None):
         self.sid = sid
         self.episodes = defaultdict(dict)
         
-        for row in lines:
+        for row in data['episodes']:
             self.episodes[int(row['season'])][int(row['episode'])] = row
 
         self.seasons = list(self.episodes.keys())
         self.seasons.sort()
-
-
-        # Filter by settings
-        # for season in self.data:
-        #     for episode in self.data[season]:
-        #         eps = self.data[season][episode]
-        #         new_eps = [row for row in eps if self.config['quality'](row)]
-        #         if len(new_eps) > 0:
-        #             eps = new_eps
-        #
-        #         new_eps = [row for row in eps if self.config['translate'](row)]
-        #         if len(new_eps) > 0:
-        #             eps = new_eps
-        #
-        #         self.data[season][episode] = eps
-
+        
+        self.covers = dict(
+            (int(cover['season']), cover['big'])
+            for cover in data.get('covers', list())
+        )
+        
     def count_seasons(self):
         return len(self.episodes)
     
@@ -667,17 +595,29 @@ class SoapEpisodes(object):
         return self.seasons[0]
 
     def list_seasons(self):
-        
         return [
             MenuRow(
                 str(season),
-                "Season {season}".format(season=season),
+                "Season {season}{new}".format(
+                    season=season,
+                    new=MenuRow.get_new(sum(ep['watched'] != 1 for ep in self.episodes[season].values()))
+                ),
+                img=self.covers.get(season),
                 is_folter=True,
                 is_watched=all(ep['watched'] == 1 for ep in self.episodes[season].values())
             )
             for season in self.seasons
         ]
-    
+
+    def title_episode(self, row):
+        return "S{season}E{episode} | {quality} | {translate} | {title}".format(
+            season=str(row['season']),
+            episode=str(row['episode']),
+            quality=row['quality'].encode('utf-8'),
+            translate=row['translate'].encode('utf-8'),
+            title=row['title_en'].encode('utf-8').replace('&#039;', "'").replace("&amp;", "&").replace('&quot;','"'),
+        )
+        
     def list_episodes(self, season):
         if season not in self.episodes:
             #TODO show error
@@ -703,8 +643,6 @@ class SoapEpisodes(object):
         return rows
         
 
-
-
 class SoapApi(object):
     FULL_LIST_URL = '/soap/'
     MY_LIST_URL = '/soap/my/'
@@ -722,12 +660,8 @@ class SoapApi(object):
         return self.auth.is_auth
 
     def main(self):
-        # mtd = __addon__.getSetting('_message_till_days')
-        # if mtd == '' or int(mtd) < time.time():
-        #     __addon__.setSetting('_message_till_days', str(int(time.time()) + 43200))
-        #
-        #     message_ok("Осталось {0} дней".format(self.base.token_till))
-
+        KodiConfig.message_till_days()
+        
         return [
             MenuRow('my', "Мои сериалы", is_folter=True),
             MenuRow('all', "Все сериалы", is_folter=True),
@@ -742,13 +676,14 @@ class SoapApi(object):
             url = self.EPISODES_URL.format(sid)
 
         def _request():
-            data = self.client.request(url)
-
+            data = self.client.request(url, use_cache=True)
+            
             if isinstance(data, dict) \
                     and data.get('ok', 'None') == 0 \
                     and data.get('error', '') != '':
-                # self.cache.rm(url)
+                self.client.clean(url)
                 return False
+            
             return data
 
         data = _request()
@@ -756,7 +691,7 @@ class SoapApi(object):
             self.auth.auth()
             data = _request()
             if not data:
-                #self.cache.rm(url)
+                self.client.clean(url)
                 raise Exception('Error with request')
 
         return data
@@ -768,8 +703,7 @@ class SoapApi(object):
         ]
 
     def get_all_episodes(self, sid):
-        lines = self.get_list(sid)
-        return SoapEpisodes(sid, lines['episodes'])
+        return SoapEpisodes(sid, self.get_list(sid))
 
     def get_seasons(self, episodes):
         rows = list()
