@@ -72,6 +72,7 @@ if sys.argv[1] == 'clearcache':
     __addon__.setSetting('_token_sid', '0')
     __addon__.setSetting('_token_valid', '0')
     __addon__.setSetting('_token_till', '0')
+    __addon__.setSetting('_token_check', '0')
     __addon__.setSetting('_message_till_days', '0')
     message_ok('Done')
     exit(0)
@@ -409,6 +410,7 @@ class KodiConfig(object):
             'token_sid': __addon__.getSetting('_token_sid'),
             'token_till': to_int(__addon__.getSetting('_token_till')),
             'token_valid': to_int(__addon__.getSetting('_token_valid')),
+            'token_check': to_int(__addon__.getSetting('_token_check')),
             'message_till_days': to_int(__addon__.getSetting('_message_till_days'))
         }
     
@@ -423,6 +425,10 @@ class KodiConfig(object):
     @classmethod
     def soap_set_token_valid(cls):
         __addon__.setSetting('_token_valid', str(int(time.time()) + 86400 * 7))
+
+    @classmethod
+    def soap_set_token_check(cls):
+        __addon__.setSetting('_token_check', str(int(time.time()) + 600))
     
     @classmethod
     def message_till_days(cls):
@@ -490,6 +496,7 @@ class SoapConfig(object):
         return translates
 
     def filter_files(self, files):
+        xbmc.log('FILTER ' + repr(files))
         translates = self._choice_translate(files)
         qualities = self._choice_quality(files)
         
@@ -551,8 +558,13 @@ class SoapAuth(object):
             return False
         
         self.client.set_token(params['token'])
+        
+        if params['token_check'] > time.time():
+            return True
+
         data = self.client.request(self.CHECK_URL)
         if isinstance(data, dict) and data.get('loged') == 1:
+            KodiConfig.soap_set_token_check()
             return True
 
         return False
@@ -705,7 +717,10 @@ class SoapEpisodes(object):
         for episode_num in episodes:
             episode = self.episodes[season][episode_num]
             
+            
+            
             files = config.filter_files(episode['files'])
+            
             
             for f in files:
                 rows.append(
