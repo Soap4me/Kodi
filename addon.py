@@ -69,6 +69,7 @@ if sys.argv[1] == 'clearcache':
     if os.path.exists(soappath):
         shutil.rmtree(soappath)
     __addon__.setSetting('_token', '0')
+    __addon__.setSetting('_token_sid', '0')
     __addon__.setSetting('_token_valid', '0')
     __addon__.setSetting('_token_till', '0')
     __addon__.setSetting('_message_till_days', '0')
@@ -341,6 +342,7 @@ class SoapHttpClient(SoapCookies):
         req.add_header('Accept-encoding', 'gzip')
 
         if self.token is not None:
+            self._cookies_load(req)
             req.add_header('X-API-TOKEN', self.token)
 
         post_data = self._post_data(params)
@@ -388,6 +390,7 @@ class KodiConfig(object):
         
         return {
             'token': __addon__.getSetting('_token'),
+            'token_sid': __addon__.getSetting('_token_sid'),
             'token_till': to_int(__addon__.getSetting('_token_till')),
             'token_valid': to_int(__addon__.getSetting('_token_valid')),
             'message_till_days': to_int(__addon__.getSetting('_message_till_days'))
@@ -397,6 +400,7 @@ class KodiConfig(object):
     def soap_set_auth(cls, params):
         __addon__.setSetting('_token', params.get('token', ''))
         __addon__.setSetting('_token_till', str(params.get('till', 0)))
+        __addon__.setSetting('_token_sid', str(params.get('sid', '')))
         __addon__.setSetting('_message_till_days', '')
         cls.soap_set_token_valid()
         
@@ -438,6 +442,7 @@ class SoapAuth(object):
         self.is_auth = False
 
     def login(self):
+        self.client.set_token(None)
         data = self.client.request(self.AUTH_URL, KodiConfig.kodi_get_auth())
 
         if not isinstance(data, dict) or data.get('ok') != 1:
