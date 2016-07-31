@@ -4,6 +4,7 @@
 
 import xbmc, xbmcgui, xbmcplugin, xbmcaddon
 import urllib, os, sys
+from collections import namedtuple
 
 __version__ = '1.0.0'
 __settings__ = xbmcaddon.Addon(id='plugin.video.soap4.me')
@@ -459,97 +460,97 @@ class SoapAuth(object):
         self.is_auth = True
         
 
-class SoapBase(SoapCookies):
-    HOST = 'https://api.soap4.me/v2'
-
-    def __init__(self):
-        skip_settings = not os.path.exists(soappath)
-        SoapCookies.__init__(self)
-        self.is_auth = self.init_token(skip_settings)
-
-    def _load_token(self):
-        token = __addon__.getSetting('_token')
-
-        
-
-        valid_time = to_int(__addon__.getSetting('_token_valid'))
-        till = to_int(__addon__.getSetting('_token_till'))
-        if token == '':
-            return False
-
-        if valid_time < time.time():
-            return False
-
-        if till + 10 < time.time():
-            return False
-
-        self.token = token
-        self.token_till = int(till - time.time()) / 86400
-        return True
-
-    def _save_token(self, data):
-
-    def init_token(self, skip_loading=False):
-        if not skip_loading and self._load_token():
-            return True
-
-        username, password = kodi_get_auth()
-
-        text = self.request(
-            "/auth/",
-            params = {"login": username, "password": password},
-            use_token = False
-        )
-        data = json.loads(text)
-
-        if not isinstance(data, dict) or data.get('ok') != 1:
-            message_error("Login or password are incorrect")
-            return False
-
-        self._save_token(data)
-
-        if not self._load_token():
-            message_error("Auth error")
-            return False
-
-        return True
-
-
-    def request(self, url, params=None, use_token=True):
-        if not isinstance(params, dict):
-            params = None
-
-        self._cookies_init()
-
-        req = urllib2.Request(self.HOST + url)
-        req.add_header('User-Agent', 'Kodi: plugin.soap4me v{0}'.format(__version__))
-        req.add_header('Accept-encoding', 'gzip')
-
-
-        post_data = None
-        if params is not None:
-            req.add_header('Content-Type', 'application/x-www-form-urlencoded')
-            post_data = urllib.urlencode(params)
-
-        if use_token:
-            self._cookies_load(req)
-            if self.token is not None:
-                req.add_header('X-API-TOKEN', self.token)
-
-        response = urllib2.urlopen(req, post_data)
-
-        self._cookies_save()
-
-        text = None
-        if response.info().get('Content-Encoding') == 'gzip':
-            buffer = StringIO.StringIO(response.read())
-            fstream = gzip.GzipFile(fileobj=buffer)
-            text = fstream.read()
-        else:
-            text = response.read()
-            response.close()
-
-        return text
+# class SoapBase(SoapCookies):
+#     HOST = 'https://api.soap4.me/v2'
+#
+#     def __init__(self):
+#         skip_settings = not os.path.exists(soappath)
+#         SoapCookies.__init__(self)
+#         self.is_auth = self.init_token(skip_settings)
+#
+#     def _load_token(self):
+#         token = __addon__.getSetting('_token')
+#
+#
+#
+#         valid_time = to_int(__addon__.getSetting('_token_valid'))
+#         till = to_int(__addon__.getSetting('_token_till'))
+#         if token == '':
+#             return False
+#
+#         if valid_time < time.time():
+#             return False
+#
+#         if till + 10 < time.time():
+#             return False
+#
+#         self.token = token
+#         self.token_till = int(till - time.time()) / 86400
+#         return True
+#
+#     def _save_token(self, data):
+#
+#     def init_token(self, skip_loading=False):
+#         if not skip_loading and self._load_token():
+#             return True
+#
+#         username, password = kodi_get_auth()
+#
+#         text = self.request(
+#             "/auth/",
+#             params = {"login": username, "password": password},
+#             use_token = False
+#         )
+#         data = json.loads(text)
+#
+#         if not isinstance(data, dict) or data.get('ok') != 1:
+#             message_error("Login or password are incorrect")
+#             return False
+#
+#         self._save_token(data)
+#
+#         if not self._load_token():
+#             message_error("Auth error")
+#             return False
+#
+#         return True
+#
+#
+#     def request(self, url, params=None, use_token=True):
+#         if not isinstance(params, dict):
+#             params = None
+#
+#         self._cookies_init()
+#
+#         req = urllib2.Request(self.HOST + url)
+#         req.add_header('User-Agent', 'Kodi: plugin.soap4me v{0}'.format(__version__))
+#         req.add_header('Accept-encoding', 'gzip')
+#
+#
+#         post_data = None
+#         if params is not None:
+#             req.add_header('Content-Type', 'application/x-www-form-urlencoded')
+#             post_data = urllib.urlencode(params)
+#
+#         if use_token:
+#             self._cookies_load(req)
+#             if self.token is not None:
+#                 req.add_header('X-API-TOKEN', self.token)
+#
+#         response = urllib2.urlopen(req, post_data)
+#
+#         self._cookies_save()
+#
+#         text = None
+#         if response.info().get('Content-Encoding') == 'gzip':
+#             buffer = StringIO.StringIO(response.read())
+#             fstream = gzip.GzipFile(fileobj=buffer)
+#             text = fstream.read()
+#         else:
+#             text = response.read()
+#             response.close()
+#
+#         return text
 
 def getSoapConfig():
     config = dict()
@@ -592,15 +593,121 @@ def title_episode(row):
     )
 
 
+class MenuRow(object):
+    __slots__ = ('uri', 'title', 'description', 'img', 'is_folter', 'is_watched')
+ 
+    def __init__(self, uri, title, description='', img=None, is_folter=False, is_watched=False):
+        self.uri = uri
+        self.title = title
+        self.description = description
+        self.img = img
+        self.is_folter = is_folter
+        self.is_watched = is_watched
+
+    def item(self, parts):
+        info = {}
+        info['title'] = self.title
+        info['plot'] = self.description or ''
+
+        vtype = 'video'
+
+        li = xbmcgui.ListItem(
+            info['title'],
+            iconImage=str(self.img),
+            thumbnailImage=str(self.img)
+        )
+        if self.is_watched:
+            info["playcount"] = 10
+
+        li.setInfo(type=vtype, infoLabels=info)
+        #ruri = sys.argv[0] + "?" + urllib.urlencode({"path":"/".join(parts + [uri])})
+        ruri = sys.argv[0] + "?path="+ "/".join(parts + [self.uri])
+        #print "Soap: " + ruri
+        return h, ruri, li, bool(self.is_folter)
+
 class SoapSerial(object):
-    def __init__(self, sid, serial_data=None, episodes_data=None):
+    def __init__(self, sid, data=None):
         self.sid = sid
-        self.serial_data = serial_data
-        self.episodes_data = episodes_data
+        self.data = data
+        
+    def menu(self):
+        # TODO Use english/russian
+        return MenuRow(self.sid, self.data['title'], is_folter=True)
+
+class SoapEpisodes(object):
+    def __init__(self, sid, lines=None):
+        self.sid = sid
+        self.episodes = defaultdict(dict)
+        
+        for row in lines:
+            self.episodes[int(row['season'])][int(row['episode'])] = row
+
+        self.seasons = list(self.episodes.keys())
+        self.seasons.sort()
+
+
+        # Filter by settings
+        # for season in self.data:
+        #     for episode in self.data[season]:
+        #         eps = self.data[season][episode]
+        #         new_eps = [row for row in eps if self.config['quality'](row)]
+        #         if len(new_eps) > 0:
+        #             eps = new_eps
+        #
+        #         new_eps = [row for row in eps if self.config['translate'](row)]
+        #         if len(new_eps) > 0:
+        #             eps = new_eps
+        #
+        #         self.data[season][episode] = eps
+
+    def count_seasons(self):
+        return len(self.episodes)
+    
+    def first_season(self):
+        return self.seasons[0]
+
+    def list_seasons(self):
+        
+        return [
+            MenuRow(
+                str(season),
+                "Season {season}".format(season=season),
+                is_folter=True,
+                is_watched=all(ep['watched'] == 1 for ep in self.episodes[season].values())
+            )
+            for season in self.seasons
+        ]
+    
+    def list_episodes(self, season):
+        if season not in self.episodes:
+            #TODO show error
+            raise Exception
+        
+        episodes = self.episodes[season].keys()
+        episodes.sort()
+
+        
+        rows = list()
+
+        for episode_num in episodes:
+            episode = self.episodes[season][episode_num]
+            rows.append(
+                MenuRow(
+                    str(episode_num),
+                    episode['title_en'],
+                    is_folter=False,
+                    is_watched=episode['watched'] == 1
+                )
+            )
+            
+        return rows
+        
+
+
 
 class SoapApi(object):
     FULL_LIST_URL = '/soap/'
-    MY_LIST_URL = '/my/'
+    MY_LIST_URL = '/soap/my/'
     EPISODES_URL = '/episodes/{0}/'
     
     def __init__(self):
@@ -615,15 +722,15 @@ class SoapApi(object):
         return self.auth.is_auth
 
     def main(self):
-        mtd = __addon__.getSetting('_message_till_days')
-        if mtd == '' or int(mtd) < time.time():
-            __addon__.setSetting('_message_till_days', str(int(time.time()) + 43200))
-
-            message_ok("Осталось {0} дней".format(self.base.token_till))
+        # mtd = __addon__.getSetting('_message_till_days')
+        # if mtd == '' or int(mtd) < time.time():
+        #     __addon__.setSetting('_message_till_days', str(int(time.time()) + 43200))
+        #
+        #     message_ok("Осталось {0} дней".format(self.base.token_till))
 
         return [
-            ("my", "Мои сериалы", "", None, True, False),
-            ("all", "Все сериалы", "", None, True, False)
+            MenuRow('my', "Мои сериалы", is_folter=True),
+            MenuRow('all', "Все сериалы", is_folter=True),
         ]
 
     def get_list(self, sid):
@@ -656,32 +763,13 @@ class SoapApi(object):
 
     def get_serials(self, type):
         return [
-            SoapSerial(row['sid'], serial_data=row)
+            SoapSerial(row['sid'], row).menu()
             for row in self.get_list(type)
         ]
 
     def get_all_episodes(self, sid):
-        data = defaultdict(lambda: defaultdict(list))
         lines = self.get_list(sid)
-
-        for row in lines:
-            data[int(row['season'])][int(row['episode'])].append(row)
-
-        # Filter by settings
-        for season in data:
-            for episode in data[season]:
-                eps = data[season][episode]
-                new_eps = [row for row in eps if self.config['quality'](row)]
-                if len(new_eps) > 0:
-                    eps = new_eps
-
-                new_eps = [row for row in eps if self.config['translate'](row)]
-                if len(new_eps) > 0:
-                    eps = new_eps
-
-                data[season][episode] = eps
-
-        return data
+        return SoapEpisodes(sid, lines['episodes'])
 
     def get_seasons(self, episodes):
         rows = list()
@@ -697,13 +785,11 @@ class SoapApi(object):
                 season=season
             )
 
-            rows.append((
+            rows.append(MenuRow(
                 str(season),
                 title,
-                "",
-                season_img(row["season_id"]),
-                True,
-                all(ep[0]['watched'] is not None for ep in season_dict.values())
+                is_folter=True,
+                is_watched=all(ep[0]['watched'] is not None for ep in season_dict.values())
             ))
 
         return rows
@@ -805,45 +891,24 @@ class SoapApi(object):
             all_episodes = self.get_all_episodes(parts[2])
 
             if len(parts) == 3:
-                rows = self.get_seasons(all_episodes)
-                if len(rows) > 1:
-                    return rows
+                if all_episodes.count_seasons() > 1:
+                    return all_episodes.list_seasons()
 
-                parts.append(str(all_episodes.keys()[0]))
-
-            episodes = self.get_episodes(all_episodes, int(parts[3]))
+                parts.append(str(all_episodes.first_season()))
 
             if len(parts) == 4:
-                return self.get_rows_episodes(episodes)
+                return all_episodes.list_episodes(int(parts[3]))
             elif len(parts) == 5:
-                if not self.get_play(episodes, parts[-1]):
-                    parts.pop(-1)
-                    return self.get_rows_episodes(episodes)
+                raise
+            #     if not self.get_play(episodes, parts[-1]):
+            #         parts.pop(-1)
+            #         return self.get_rows_episodes(episodes)
+            return self.main()
 
 
 def kodi_draw_list(parts, rows):
-    # row = (uri, title, description, sid)
-
-    for (uri, title, description, img, is_folter, is_watched) in rows:
-        info = {}
-        info['title'] = title
-        info['plot'] = description
-
-        vtype = 'video'
-
-        li = xbmcgui.ListItem(
-            info['title'],
-            iconImage=str(img),
-            thumbnailImage=str(img)
-        )
-        if is_watched:
-            info["playcount"] = 10
-
-        li.setInfo(type=vtype, infoLabels=info)
-        #ruri = sys.argv[0] + "?" + urllib.urlencode({"path":"/".join(parts + [uri])})
-        ruri = sys.argv[0] + "?path="+ "/".join(parts + [uri])
-        #print "Soap: " + ruri
-        xbmcplugin.addDirectoryItem(h, ruri, li, is_folter)
+    for row in rows:
+        xbmcplugin.addDirectoryItem(*row.item(parts))
 
     xbmcplugin.addSortMethod(h, xbmcplugin.SORT_METHOD_UNSORTED)
     xbmcplugin.addSortMethod(h, xbmcplugin.SORT_METHOD_DATE)
