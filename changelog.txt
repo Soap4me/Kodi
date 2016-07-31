@@ -1,3 +1,9 @@
+v1.0.0
+- Use api version 2
+- FullHD support
+- Save watched position on server
+- Full refactoring
+
 v0.4.0
 - Add automatic choosing audio and subtitle streams
 - Changes in settings
