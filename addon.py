@@ -119,20 +119,27 @@ class SoapPlayer(xbmc.Player):
                 and self.watched_time > 0 and self.total_time > 0 \
                 and self.watched_time / self.total_time > 0.9:
             self.end_callback()
+        elif self.watched_time:
+            self.stop_callback(self.watched_time)
 
         return super(SoapPlayer, self).onPlayBackEnded()
 
     def onPlayBackStopped(self):
         """Will be called when user stops xbmc playing a file."""
+
         if self.watched_time and self.total_time and self.end_callback is not None \
                 and self.watched_time > 0 and self.total_time > 0 \
                 and self.watched_time / self.total_time > 0.9:
             self.end_callback()
-
+        elif self.watched_time:
+            self.stop_callback(self.watched_time)
+            
         return super(SoapPlayer, self).onPlayBackStopped()
 
     def onPlayBackPaused(self):
         """Will be called when user pauses a playing file."""
+        if self.watched_time:
+            self.stop_callback(self.watched_time)
         return super(SoapPlayer, self).onPlayBackPaused()
 
     def onPlayBackResumed(self):
@@ -152,12 +159,13 @@ class SoapPlayer(xbmc.Player):
 
 
 class SoapVideo(object):
-    def __init__(self, eid, url, start_from, li, cb_watched):
+    def __init__(self, eid, url, start_from, li, cb_watched, cb_save_pos):
         self.eid = eid
         self.li = li
         self.url = url
         self.start_from = start_from
         self.cb_watched = cb_watched
+        self.cp_save_pos = cb_save_pos
         self.cache = SoapCache(soappath, 15)
 
     def set_pos(self, position):
@@ -170,7 +178,7 @@ class SoapVideo(object):
         pos = self.cache.get("pos_{0}".format(self.eid), use_lifetime=False)
 
         if pos is False or pos is "":
-            return 0
+            pos = 0
 
         pos = max(float(pos), float(self.start_from))
         if pos < 10:
@@ -225,10 +233,14 @@ class SoapVideo(object):
                 if subtitle == 3:
                     player.disableSubtitles()
 
+        def stop_cb(pos):
+            self.set_pos(pos)
+            self.cp_save_pos(pos)
+
         p.set_callback(
             play_callback=play_callback,
             end_callback=self.cb_watched,
-            stop_callback=self.set_pos,
+            stop_callback=stop_cb,
             ontime_callback=self.set_pos
         )
 
@@ -698,7 +710,7 @@ class SoapEpisodes(object):
             for f in files:
                 rows.append(
                     MenuRow(
-                        "{num}#{eid}".format(episode_num, files['eid']),
+                        "{num}#{eid}".format(num=episode_num, eid=f['eid']),
                         u"{num}  {title}  {meta}".format(
                             num=MenuRow.get_episode_num(episode),
                             title=episode['title_en'].replace('&#039;', "'").replace("&amp;", "&").replace('&quot;','"'),
@@ -718,7 +730,7 @@ class SoapEpisodes(object):
         eid = int(eid)
         ehash = None
         
-        for f in self.episodes[season][num]:
+        for f in self.episodes[season][num]['files']:
             if int(f['eid']) == eid:
                 ehash = f['hash']
         
@@ -809,8 +821,8 @@ class SoapApi(object):
             "hash": myhash
         }
         result = self.client.request(self.PLAY_EPISODES_URL.format(eid=eid), data)
-
-        if not isinstance(data, dict) or data.get("ok", 0) == 0:
+        
+        if not isinstance(result, dict) or result.get("ok", 0) == 0:
             raise SoapException("Bad getting videolink")
 
         return result
@@ -822,17 +834,26 @@ class SoapApi(object):
         data = self.client.request(self.MARK_WATCHED.format(eid=eid), params)
         return isinstance(data, dict) and data.get('ok', 0) == 1
 
+    def save_position(self, eid, position):
+        params = {
+            'eid': eid,
+            'time': int(position)
+        }
+        data = self.client.request(self.SAVE_POSITION_URL.format(eid=eid), params)
+        return isinstance(data, dict) and data.get('ok', 0) == 1
+
     def get_play(self, all_episodes, params):
         ep_data, img = all_episodes.get_episode(params)
         data = self._get_video(**ep_data)
         li = xbmcgui.ListItem(data['title'], iconImage=img, thumbnailImage=img)
-        mark_cb = lambda : self.mark_watched(ep_data['eid'])
+
         sv = SoapVideo(
             ep_data['eid'],
-            ep_data['stream'],
-            ep_data['start_from'],
+            data['stream'],
+            data['start_from'] or 0,
             li,
-            mark_cb
+            lambda : self.mark_watched(ep_data['eid']),
+            lambda pos: self.save_position(ep_data['eid'], pos)
         )
         sv.play()
 
