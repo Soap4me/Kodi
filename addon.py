@@ -433,6 +433,76 @@ class KodiConfig(object):
         }
     
     
+class SoapConfig(object):
+    def __init__(self):
+        self.quality = int(__addon__.getSetting('quality')) # 0 all, 1 SD, 2 720p, 3 FullHD
+        self.translate = int(__addon__.getSetting('translate')) # 0 all, 1 subs, 2 voice
+        self.audio =  int(__addon__.getSetting('audio')) == 1 # 0 all, 1 rus 2 orig
+        self.subtitle =  int(__addon__.getSetting('subtitle')) == 1 # 0 all, 1 rus 2 orig
+        self.reverse = int(__addon__.getSetting('sorting')) == 1 # 0 down, 1 up
+        
+    def _choice_quality(self, files):
+        qualities = set([int(f['quality']) for f in files])
+
+        if self.quality != 0:
+            if all(q > self.quality for q in qualities):
+                qualities = set([min(qualities)])
+            else:
+                qualities = set([max([q for q in qualities if q <= self.quality])])
+                
+        return qualities
+    
+    def _choice_translate(self, files):
+        translates = set([int(f['translate']) for f in files])
+
+        if self.audio == 2 and (len(translates) > 1 or 4 not in translates):
+            translates = set( t for t in translates if t < 4 )
+
+        if self.translate != 0:
+            if self.translate == 1 and (2 in translates or 3 in translates):
+                translates = set(t for t in translates if t in (2, 3))
+                
+                if self.subtitle != 0:
+                    if self.subtitle == 1 and 3 in translates:
+                        translates = set([3])
+                    elif self.subtitle == 2 and 2 in translates:
+                        translates = set([2])
+                        
+            if self.translate == 2 and 4 in translates:
+                translates = set([4])
+                
+        return translates
+
+    def filter_files(self, files):
+        translates = self._choice_translate(files)
+        qualities = self._choice_quality(files)
+        
+        return [
+            f for f in files
+            if int(f['translate']) in translates and int(f['quality']) in qualities
+        ]
+
+    @classmethod
+    def name_quality(cls, quality):
+        if quality == 1:
+            return 'SD'
+        elif quality == 2:
+            return '720p'
+        elif quality == 3:
+            return 'FullHD'
+        
+    @classmethod
+    def name_translate(cls, translate):
+        if translate == 1:
+            return 'Original'
+        elif translate == 2:
+            return 'OrigSubs'
+        elif translate == 3:
+            return 'RusSubs'
+        elif translate == 4:
+            return u'Перевод'
+        
+    
 class SoapAuth(object):
     AUTH_URL = '/auth/'
     CHECK_URL = '/auth/check/'
@@ -483,38 +553,6 @@ class SoapAuth(object):
                 
         self.client.set_token(params['token'])
         self.is_auth = True
-        
-
-def getSoapConfig():
-    config = dict()
-
-    config['reverse'] = str(__addon__.getSetting('sorting')) == "1"  # 0 - down, 1 - up
-
-    # 0 - all, 1 - SD, 2 - 720p
-    config['quality'] = lambda row: True
-    if str(__addon__.getSetting('quality')) == "1":
-        config['quality'] = lambda row: row['quality'] == "SD"
-    elif str(__addon__.getSetting('quality')) == "2":
-        config['quality'] = lambda row: row['quality'] == "720p"
-
-    # 0 - all, 1 - subs, 2 - voice
-    config['translate'] = lambda row: True
-    if str(__addon__.getSetting('translate')) == "1":
-        config['translate'] = lambda row: row['translate'].strip().encode("utf-8") == "Субтитры"
-    elif str(__addon__.getSetting('translate')) == "2":
-        config['translate'] = lambda row: row['translate'].strip().encode("utf-8") != "Субтитры"
-    return config
-
-
-def serial_img(sid):
-    if sid == "":
-        return None
-    return "http://covers.s4me.ru/soap/big/{0}.jpg".format(sid)
-
-def season_img(season_id):
-    if season_id == "":
-        return None
-    return "http://covers.s4me.ru/season/big/{0}.jpg".format(season_id)
 
 
 class MenuRow(object):
@@ -553,9 +591,23 @@ class MenuRow(object):
     @staticmethod
     def get_new(count):
         if count > 0:
-            return "  [COLOR=AAAAAAAA][LIGHT]({0})[/LIGHT][/COLOR]".format(count)
+            return u"  [COLOR=AAAAAAAA][LIGHT]({0})[/LIGHT][/COLOR]".format(count)
         else:
             return ""
+        
+    @staticmethod
+    def get_title(episode_file):
+        return u"[LIGHT][COLOR=AAAACCAA][{0}][/COLOR][COLOR=AAAAAACC][{1}][/COLOR][/LIGHT]".format(
+            SoapConfig.name_quality(int(episode_file['quality'])),
+            SoapConfig.name_translate(int(episode_file['translate'])),
+        )
+    
+    @staticmethod
+    def get_episode_num(episode):
+        return u'[LIGHT][COLOR=99CCAAAA]S{0}[/COLOR][COLOR=99AACCAA]E{1:02}[/COLOR][/LIGHT]'.format(
+            int(episode['season']), int(episode['episode'])
+        )
+    
 
 
 class SoapSerial(object):
@@ -623,7 +675,7 @@ class SoapEpisodes(object):
             title=row['title_en'].encode('utf-8').replace('&#039;', "'").replace("&amp;", "&").replace('&quot;','"'),
         )
         
-    def list_episodes(self, season):
+    def list_episodes(self, season, config):
         if season not in self.episodes:
             #TODO show error
             raise Exception
@@ -636,14 +688,22 @@ class SoapEpisodes(object):
 
         for episode_num in episodes:
             episode = self.episodes[season][episode_num]
-            rows.append(
-                MenuRow(
-                    str(episode_num),
-                    episode['title_en'],
-                    is_folter=False,
-                    is_watched=episode['watched'] == 1
+            
+            files = config.filter_files(episode['files'])
+            
+            for f in files:
+                rows.append(
+                    MenuRow(
+                        str(episode_num),
+                        u"{num}  {title}  {meta}".format(
+                            num=MenuRow.get_episode_num(episode),
+                            title=episode['title_en'].replace('&#039;', "'").replace("&amp;", "&").replace('&quot;','"'),
+                            meta=MenuRow.get_title(f)
+                        ),
+                        is_folter=False,
+                        is_watched=episode['watched'] == 1
+                    )
                 )
-            )
             
         return rows
         
@@ -656,7 +716,7 @@ class SoapApi(object):
     def __init__(self):
         self.client = SoapHttpClient()
         self.auth = SoapAuth(self.client)
-        self.config = getSoapConfig()
+        self.config = SoapConfig()
 
         self.auth.auth()
 
@@ -831,12 +891,19 @@ class SoapApi(object):
 
             if len(parts) == 3:
                 if all_episodes.count_seasons() > 1:
-                    return all_episodes.list_seasons()
+                    rows = all_episodes.list_seasons()
+                    if self.config.reverse:
+                        rows = rows[::-1]
+                    return rows
 
                 parts.append(str(all_episodes.first_season()))
 
             if len(parts) == 4:
-                return all_episodes.list_episodes(int(parts[3]))
+                rows = all_episodes.list_episodes(int(parts[3]), self.config)
+                if self.config.reverse:
+                    rows = rows[::-1]
+                return rows
+            
             elif len(parts) == 5:
                 raise
             #     if not self.get_play(episodes, parts[-1]):
