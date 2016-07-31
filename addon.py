@@ -152,10 +152,11 @@ class SoapPlayer(xbmc.Player):
 
 
 class SoapVideo(object):
-    def __init__(self, eid, url, li, cb_watched):
+    def __init__(self, eid, url, start_from, li, cb_watched):
         self.eid = eid
         self.li = li
         self.url = url
+        self.start_from = start_from
         self.cb_watched = cb_watched
         self.cache = SoapCache(soappath, 15)
 
@@ -167,10 +168,13 @@ class SoapVideo(object):
 
     def get_pos(self):
         pos = self.cache.get("pos_{0}".format(self.eid), use_lifetime=False)
-        if pos is False or pos is "" or float(pos) < 10:
+
+        if pos is False or pos is "":
             return 0
 
-        pos = float(pos)
+        pos = max(float(pos), float(self.start_from))
+        if pos < 10:
+            return 0
 
         dialog = xbmcgui.Dialog()
         ret = dialog.select(u'Воспроизвести', [u'С {0}'.format(get_time(pos)), u'Сначала'])
@@ -622,7 +626,7 @@ class SoapSerial(object):
             title += MenuRow.get_new(self.data['unwatched'])
         
         return MenuRow(
-            self.sid,
+            str(self.sid),
             title,
             self.data.get('description'),
             img=self.data['covers']['big'],
@@ -694,7 +698,7 @@ class SoapEpisodes(object):
             for f in files:
                 rows.append(
                     MenuRow(
-                        str(episode_num),
+                        "{num}#{eid}".format(episode_num, files['eid']),
                         u"{num}  {title}  {meta}".format(
                             num=MenuRow.get_episode_num(episode),
                             title=episode['title_en'].replace('&#039;', "'").replace("&amp;", "&").replace('&quot;','"'),
@@ -706,12 +710,34 @@ class SoapEpisodes(object):
                 )
             
         return rows
+    
+    def get_episode(self, params):
+        season = int(params[0])
+        num, eid = params[1].split('#', 1)
+        num = int(num)
+        eid = int(eid)
+        ehash = None
+        
+        for f in self.episodes[season][num]:
+            if int(f['eid']) == eid:
+                ehash = f['hash']
+        
+        return {
+            'sid': self.sid,
+            'eid': eid,
+            'ehash': ehash
+        }, self.covers.get(season)
+        
         
 
 class SoapApi(object):
     FULL_LIST_URL = '/soap/'
     MY_LIST_URL = '/soap/my/'
     EPISODES_URL = '/episodes/{0}/'
+    
+    PLAY_EPISODES_URL = '/play/episode/{eid}/'
+    SAVE_POSITION_URL = '/play/episode/{eid}/savets/'
+    MARK_WATCHED = '/episodes/watch/{eid}/'
     
     def __init__(self):
         self.client = SoapHttpClient()
@@ -763,122 +789,54 @@ class SoapApi(object):
 
     def get_serials(self, type):
         return [
-            SoapSerial(row['sid'], row).menu()
+            SoapSerial(int(row['sid']), row).menu()
             for row in self.get_list(type)
         ]
 
     def get_all_episodes(self, sid):
         return SoapEpisodes(sid, self.get_list(sid))
 
-    def get_seasons(self, episodes):
-        rows = list()
-        seasons = list(episodes.keys())
-        seasons.sort()
-
-        for season in seasons:
-            season_dict = episodes[season]
-            episode = season_dict.values()[0]
-            row = episode[0]
-
-            title = "Season {season}".format(
-                season=season
-            )
-
-            rows.append(MenuRow(
-                str(season),
-                title,
-                is_folter=True,
-                is_watched=all(ep[0]['watched'] is not None for ep in season_dict.values())
-            ))
-
-        return rows
-
-    def get_episodes(self, episodes, season):
-        episodes_list = list()
-        #season = int(parts[3])
-        season_dict = episodes[season]
-        episodes = season_dict.items()
-        episodes.sort(key=lambda (episode, _): episode, reverse=self.config['reverse'])
-
-        map(episodes_list.extend, [ep_data for (_, ep_data) in episodes])
-
-        return episodes_list
-
-    def get_rows_episodes(self, episodes_list):
-        rows = list()
-        for row in episodes_list:
-            rows.append((
-                row["eid"],
-                title_episode(row),
-                "",
-                season_img(row["season_id"]),
-                False,
-                row['watched'] is not None
-            ))
-        return rows
-
-
     def _get_video(self, sid, eid, ehash):
         myhash = hashlib.md5(
-            str(self.base.token) + \
+            str(self.client.token) + \
             str(eid) + \
             str(sid) + \
             str(ehash)
         ).hexdigest()
 
         data = {
-            "what": "player",
-            "do": "load",
-            "token": self.base.token,
             "eid": eid,
             "hash": myhash
         }
-        url = "/callback/"
-        result = self.base.request(url, data)
+        result = self.client.request(self.PLAY_EPISODES_URL.format(eid=eid), data)
 
-        if result == '':
-            result = '{}'
-
-        data = json.loads(result)
         if not isinstance(data, dict) or data.get("ok", 0) == 0:
             raise SoapException("Bad getting videolink")
 
-        return "http://%s.soap4.me/%s/%s/%s/" % (data['server'], self.base.token, eid, myhash)
-
-
-    def get_video(self, row):
-        if 'sid' not in row or 'eid' not in row or 'hash' not in row:
-            raise SoapException("Bad episode row.")
-
-        return self._get_video(row['sid'], row['eid'], row['hash'])
-
+        return result
 
     def mark_watched(self, eid):
-        text = self.base.request("/callback/", {
-            "what": "mark_watched",
-            "eid": str(eid),
-            "token": self.base.token
-        })
-        data = json.loads(text)
-
+        params = {
+            'eid': eid
+        }
+        data = self.client.request(self.MARK_WATCHED.format(eid=eid), params)
         return isinstance(data, dict) and data.get('ok', 0) == 1
 
-    def get_play(self, episodes_list, eid):
-        # eid = parts[4]
-        data = [row for row in episodes_list if row['eid'] == eid]
-        if len(data) >= 1:
-            row = data[0]
+    def get_play(self, all_episodes, params):
+        ep_data, img = all_episodes.get_episode(params)
+        data = self._get_video(**ep_data)
+        li = xbmcgui.ListItem(data['title'], iconImage=img, thumbnailImage=img)
+        mark_cb = lambda : self.mark_watched(ep_data['eid'])
+        sv = SoapVideo(
+            ep_data['eid'],
+            ep_data['stream'],
+            ep_data['start_from'],
+            li,
+            mark_cb
+        )
+        sv.play()
 
-            url = self.get_video(row)
-            img = season_img(row['season_id'])
-            title = title_episode(row)
-            li = xbmcgui.ListItem(title, iconImage=img, thumbnailImage=img)
-            cb = lambda : self.mark_watched(eid)
-            sv = SoapVideo(eid, url, li, cb)
-            sv.play()
-
-            return True
-        return False
+        return True
 
 
     def process(self, parts):
@@ -905,10 +863,13 @@ class SoapApi(object):
                 return rows
             
             elif len(parts) == 5:
-                raise
-            #     if not self.get_play(episodes, parts[-1]):
-            #         parts.pop(-1)
-            #         return self.get_rows_episodes(episodes)
+                if not self.get_play(all_episodes, parts[-2:]):
+                     parts.pop(-1)
+                     rows = all_episodes.list_episodes(int(parts[3]), self.config)
+                     if self.config.reverse:
+                         rows = rows[::-1]
+                     return rows
+            
             return self.main()
 
 
