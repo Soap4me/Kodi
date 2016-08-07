@@ -400,7 +400,10 @@ class SoapHttpClient(SoapCookies):
     def clean(self, url):
         self.cache.rm(url)
 
+
 to_int = lambda s: int(s) if s != '' else 0
+
+
 class KodiConfig(object):
     @classmethod
     def soap_get_auth(cls):
@@ -583,15 +586,21 @@ class SoapAuth(object):
         self.is_auth = True
 
 
+def _color(color, text):
+    return u"[COLOR={0}]{1}[/COLOR]".format(color, text)
+
+def _light(text):
+    return u"[LIGHT]{0}[/LIGHT]".format(text)
+
 class MenuRow(object):
-    __slots__ = ('link', 'title', 'description', 'img', 'is_folter', 'is_watched', 'meta')
+    __slots__ = ('link', 'title', 'description', 'img', 'is_folder', 'is_watched', 'meta')
  
-    def __init__(self, link, title, description='', img=None, is_folter=False, is_watched=False, meta=None):
+    def __init__(self, link, title, description='', img=None, is_folder=False, is_watched=False, meta=None):
         self.link = link
         self.title = title
         self.description = description
         self.img = img
-        self.is_folter = is_folter
+        self.is_folder = is_folder
         self.is_watched = is_watched
         self.meta = meta
 
@@ -616,21 +625,23 @@ class MenuRow(object):
             
         li.setInfo(type=vtype, infoLabels=info)
 
-        return h, parts.uri(self.link), li, bool(self.is_folter)
+        return h, parts.uri(self.link), li, bool(self.is_folder)
 
     @staticmethod
     def get_new(count):
         if count > 0:
-            return u"  [COLOR=AAAAAAAA][LIGHT]({0})[/LIGHT][/COLOR]".format(count)
+            return u"  " + _color("AAAAAAAA", _light("({0})".format(count)))
         else:
             return ""
         
     @staticmethod
-    def get_title(episode_file):
-        return u"[LIGHT][COLOR=AAAACCAA][{0}][/COLOR][COLOR=AAAAAACC][{1}][/COLOR][/LIGHT]".format(
-            SoapConfig.name_quality(int(episode_file['quality'])),
-            SoapConfig.name_translate(int(episode_file['translate'])),
-        )
+    def get_meta_title(episode_file):
+        quality = u"[{0}]".format(SoapConfig.name_quality(int(episode_file['quality'])))
+        translate = u"[{0}]".format(SoapConfig.name_translate(int(episode_file['translate'])))
+        return _light(u"{0}{1}".format(
+            _color("AAAACCAA", quality),
+            _color("AAAAAACC", translate)
+        ))
     
     @staticmethod
     def get_episode_num(episode):
@@ -665,9 +676,60 @@ class SoapSerial(object):
             title,
             self.data.get('description'),
             img=self.data['covers']['big'],
-            is_folter=True,
+            is_folder=True,
             meta=meta
         )
+
+class SoapEpisode(object):
+    def __init__(self, data, sid=None):
+        self.data = data
+        self.sid = sid or self.data.get('sid')
+        self.season = int(self.data.get('season'))
+        self.epnum = int(self.data.get('episode'))
+
+    def label(self, f, with_soapname=False):
+        label =  u"{num}  {title}  {meta}".format(
+                            num=MenuRow.get_episode_num(self.data),
+                            title=self.title(),
+                            meta=MenuRow.get_meta_title(f)
+                        )
+        if with_soapname:
+            label = u"{soapname}: {label}".format(soapname=self.soapname(), label=label)
+            
+        return label
+    
+    def soapname(self):
+        return self.data['soap'].replace('&#039;', "'").replace("&amp;", "&").replace('&quot;','"')
+    
+    def title(self):
+        return self.data['title_en'].replace('&#039;', "'").replace("&amp;", "&").replace('&quot;','"')
+    
+    def is_watched(self):
+        return self.data.get('watched', 0) == 1
+    
+    def get_hash(self, eid):
+        for f in self.data['files']:
+            if int(f['eid']) == eid:
+                return f['hash']
+    
+    def menu(self, config, with_soapname=False):
+        files = config.filter_files(self.data['files'])
+
+        return [
+            MenuRow(
+                {
+                    'page': 'Play',
+                    'sid': self.sid,
+                    'season': self.season,
+                    'epnum': self.epnum,
+                    'eid': f['eid']
+                },
+                self.label(f, with_soapname),
+                is_folder=False,
+                is_watched=self.is_watched()
+            ) for f in files
+        ]
+        
 
 class SoapEpisodes(object):
     def __init__(self, sid, data=None):
@@ -675,7 +737,9 @@ class SoapEpisodes(object):
         self.episodes = defaultdict(dict)
         
         for row in data['episodes']:
-            self.episodes[int(row['season'])][int(row['episode'])] = row
+            season = int(row['season'])
+            epnum = int(row['episode'])
+            self.episodes[season][epnum] = SoapEpisode(row, sid=self.sid)
 
         self.seasons = list(self.episodes.keys())
         self.seasons.sort()
@@ -697,23 +761,15 @@ class SoapEpisodes(object):
                 {'season': season},
                 "Season {season}{new}".format(
                     season=season,
-                    new=MenuRow.get_new(sum(ep['watched'] != 1 for ep in self.episodes[season].values()))
+                    new=MenuRow.get_new(sum(not ep.is_watched() for ep in self.episodes[season].values()))
                 ),
                 img=self.covers.get(season),
-                is_folter=True,
-                is_watched=all(ep['watched'] == 1 for ep in self.episodes[season].values())
+                is_folder=True,
+                is_watched=all(ep.is_watched() for ep in self.episodes[season].values())
             )
             for season in self.seasons
         ]
 
-    def title_episode(self, row):
-        return "S{season}E{episode} | {quality} | {translate} | {title}".format(
-            season=str(row['season']),
-            episode=str(row['episode']),
-            quality=row['quality'].encode('utf-8'),
-            translate=row['translate'].encode('utf-8'),
-            title=row['title_en'].encode('utf-8').replace('&#039;', "'").replace("&amp;", "&").replace('&quot;','"'),
-        )
         
     def list_episodes(self, season, config):
         if season not in self.episodes:
@@ -727,22 +783,7 @@ class SoapEpisodes(object):
         rows = list()
 
         for episode_num in episodes:
-            episode = self.episodes[season][episode_num]
-
-            files = config.filter_files(episode['files'])
-            for f in files:
-                rows.append(
-                    MenuRow(
-                        {'page': 'Play', 'epnum': episode_num, 'eid': f['eid']},
-                        u"{num}  {title}  {meta}".format(
-                            num=MenuRow.get_episode_num(episode),
-                            title=episode['title_en'].replace('&#039;', "'").replace("&amp;", "&").replace('&quot;','"'),
-                            meta=MenuRow.get_title(f)
-                        ),
-                        is_folter=False,
-                        is_watched=episode['watched'] == 1
-                    )
-                )
+            rows.extend(self.episodes[season][episode_num].menu(config))
             
         return rows
     
@@ -750,11 +791,7 @@ class SoapEpisodes(object):
         season = int(season)
         num = int(epnum)
         eid = int(eid)
-        ehash = None
-        
-        for f in self.episodes[season][num]['files']:
-            if int(f['eid']) == eid:
-                ehash = f['hash']
+        ehash = self.episodes[season][num].get_hash(eid)
         
         return {
             'sid': self.sid,
@@ -765,10 +802,15 @@ class SoapEpisodes(object):
         
 
 class SoapApi(object):
-    FULL_LIST_URL = '/soap/'
-    MY_LIST_URL = '/soap/my/'
     EPISODES_URL = '/episodes/{0}/'
     
+    LISTS_URL = {
+        'all': '/soap/',
+        'my': '/soap/my/',
+        'all_last': '/episodes/new/',
+        'my_last': '/episodes/new/my/',
+    }
+        
     PLAY_EPISODES_URL = '/play/episode/{eid}/'
     SAVE_POSITION_URL = '/play/episode/{eid}/savets/'
     MARK_WATCHED = '/episodes/watch/{eid}/'
@@ -788,15 +830,23 @@ class SoapApi(object):
         KodiConfig.message_till_days()
         
         return [
-            MenuRow({'page': 'My', 'param': 'my'}, "Мои сериалы", is_folter=True),
-            MenuRow({'page': 'All', 'param': 'my'}, "Все сериалы", is_folter=True),
+            MenuRow({'page': 'My', 'param': 'my'}, u"Мои сериалы", is_folder=True),
+            MenuRow({'page': 'All', 'param': 'my'}, u"Все сериалы", is_folder=True),
+        ]
+    
+    def my_menu(self):
+        return [
+            MenuRow({'page': 'MyLast'}, _color('FFFFFFAA', u"Последние 20 эпизодов"), is_folder=True)
+        ]
+
+    def all_menu(self):
+        return [
+            MenuRow({'page': 'AllLast'}, _color('FFFFFFAA', u"Последние 20 эпизодов"), is_folder=True)
         ]
 
     def get_list(self, sid):
-        if sid == 'my':
-            url = self.MY_LIST_URL
-        elif sid == 'all':
-            url = self.FULL_LIST_URL
+        if sid in self.LISTS_URL:
+            url = self.LISTS_URL[sid]
         else:
             url = self.EPISODES_URL.format(sid)
 
@@ -829,6 +879,16 @@ class SoapApi(object):
 
     def get_all_episodes(self, sid):
         return SoapEpisodes(sid, self.get_list(sid))
+    
+    
+    def get_last_episodes(self, type):
+        rows = list()
+        config = SoapConfig()
+        
+        for data in self.get_list(type + "_last"):
+            rows.extend(SoapEpisode(data).menu(config, True))
+            
+        return rows
 
     def _get_video(self, sid, eid, ehash):
         myhash = hashlib.md5(
@@ -886,9 +946,16 @@ class SoapApi(object):
         if parts.page == 'Main' or parts.page is None:
             return self.main()
         elif parts.page == 'My':
-            return self.get_serials('my')
+            return self.my_menu() + \
+                   self.get_serials('my')
+        elif parts.page == 'MyLast':
+            return self.get_last_episodes('my')
         elif parts.page == 'All':
-            return self.get_serials('all')
+            return self.all_menu() + \
+                   self.get_serials('all')
+        elif parts.page == 'AllLast':
+            return self.get_last_episodes('all')
+
         elif parts.page == 'Serial':
             return self.get_serials(parts.sid)
         elif parts.page == 'Episodes':
@@ -991,6 +1058,8 @@ def debug(func):
 
 @debug
 def addon_main():
+    xbmc.log(repr(sys.argv))
+    
     parts = KodiUrl.init()
     api = SoapApi()
 
