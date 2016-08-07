@@ -681,11 +681,12 @@ class SoapSerial(object):
         )
 
 class SoapEpisode(object):
-    def __init__(self, data, sid=None):
+    def __init__(self, data, sid=None, img=None):
         self.data = data
         self.sid = sid or self.data.get('sid')
         self.season = int(self.data.get('season'))
         self.epnum = int(self.data.get('episode'))
+        self.img = img or self.data.get('covers', {}).get('big')
 
     def label(self, f, with_soapname=False):
         label =  u"{num}  {title}  {meta}".format(
@@ -725,6 +726,7 @@ class SoapEpisode(object):
                     'eid': f['eid']
                 },
                 self.label(f, with_soapname),
+                img=self.img,
                 is_folder=False,
                 is_watched=self.is_watched()
             ) for f in files
@@ -735,20 +737,20 @@ class SoapEpisodes(object):
     def __init__(self, sid, data=None):
         self.sid = sid
         self.episodes = defaultdict(dict)
-        
-        for row in data['episodes']:
-            season = int(row['season'])
-            epnum = int(row['episode'])
-            self.episodes[season][epnum] = SoapEpisode(row, sid=self.sid)
 
-        self.seasons = list(self.episodes.keys())
-        self.seasons.sort()
-        
         self.covers = dict(
             (int(cover['season']), cover['big'])
             for cover in data.get('covers', list())
         )
         
+        for row in data['episodes']:
+            season = int(row['season'])
+            epnum = int(row['episode'])
+            self.episodes[season][epnum] = SoapEpisode(row, sid=self.sid, img=self.covers.get(season))
+
+        self.seasons = list(self.episodes.keys())
+        self.seasons.sort()
+                
     def count_seasons(self):
         return len(self.episodes)
     
