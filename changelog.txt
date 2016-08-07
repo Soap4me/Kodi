@@ -1,3 +1,8 @@
+v1.0.1
+- Last 20 episodes
+- Covers for episodes
+- New navigation in plugin
+
 v1.0.0
 - Use api version 2
 - FullHD support
