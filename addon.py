@@ -584,15 +584,16 @@ class SoapAuth(object):
 
 
 class MenuRow(object):
-    __slots__ = ('uri', 'title', 'description', 'img', 'is_folter', 'is_watched')
+    __slots__ = ('link', 'title', 'description', 'img', 'is_folter', 'is_watched', 'meta')
  
-    def __init__(self, uri, title, description='', img=None, is_folter=False, is_watched=False):
-        self.uri = uri
+    def __init__(self, link, title, description='', img=None, is_folter=False, is_watched=False, meta=None):
+        self.link = link
         self.title = title
         self.description = description
         self.img = img
         self.is_folter = is_folter
         self.is_watched = is_watched
+        self.meta = meta
 
     def item(self, parts):
         info = {}
@@ -609,12 +610,13 @@ class MenuRow(object):
         )
         if self.is_watched:
             info["playcount"] = 10
-
+            
+        if self.meta and isinstance(self.meta, dict):
+            info.update(self.meta)
+            
         li.setInfo(type=vtype, infoLabels=info)
-        #ruri = sys.argv[0] + "?" + urllib.urlencode({"path":"/".join(parts + [uri])})
-        ruri = sys.argv[0] + "?path="+ "/".join(parts + [self.uri])
-        #print "Soap: " + ruri
-        return h, ruri, li, bool(self.is_folter)
+
+        return h, parts.uri(self.link), li, bool(self.is_folter)
 
     @staticmethod
     def get_new(count):
@@ -649,12 +651,22 @@ class SoapSerial(object):
         if self.data.get('unwatched', 0) > 0:
             title += MenuRow.get_new(self.data['unwatched'])
         
+        meta = {
+            'IMDBNumber': self.data.get('imdb_id'),
+            'Votes': self.data.get('imdb_votes'),
+            'Rating': self.data.get('imdb_rating'),
+            'Year': self.data.get('year'),
+            'Country': self.data.get('country'),
+            'ChannelName': self.data.get('network'),
+        }
+        
         return MenuRow(
-            str(self.sid),
+            {'page': 'Episodes', 'sid': str(self.sid)},
             title,
             self.data.get('description'),
             img=self.data['covers']['big'],
-            is_folter=True
+            is_folter=True,
+            meta=meta
         )
 
 class SoapEpisodes(object):
@@ -682,7 +694,7 @@ class SoapEpisodes(object):
     def list_seasons(self):
         return [
             MenuRow(
-                str(season),
+                {'season': season},
                 "Season {season}{new}".format(
                     season=season,
                     new=MenuRow.get_new(sum(ep['watched'] != 1 for ep in self.episodes[season].values()))
@@ -716,16 +728,12 @@ class SoapEpisodes(object):
 
         for episode_num in episodes:
             episode = self.episodes[season][episode_num]
-            
-            
-            
+
             files = config.filter_files(episode['files'])
-            
-            
             for f in files:
                 rows.append(
                     MenuRow(
-                        "{num}#{eid}".format(num=episode_num, eid=f['eid']),
+                        {'page': 'Play', 'epnum': episode_num, 'eid': f['eid']},
                         u"{num}  {title}  {meta}".format(
                             num=MenuRow.get_episode_num(episode),
                             title=episode['title_en'].replace('&#039;', "'").replace("&amp;", "&").replace('&quot;','"'),
@@ -738,10 +746,9 @@ class SoapEpisodes(object):
             
         return rows
     
-    def get_episode(self, params):
-        season = int(params[0])
-        num, eid = params[1].split('#', 1)
-        num = int(num)
+    def get_episode(self, season, epnum, eid):
+        season = int(season)
+        num = int(epnum)
         eid = int(eid)
         ehash = None
         
@@ -781,8 +788,8 @@ class SoapApi(object):
         KodiConfig.message_till_days()
         
         return [
-            MenuRow('my', "Мои сериалы", is_folter=True),
-            MenuRow('all', "Все сериалы", is_folter=True),
+            MenuRow({'page': 'My', 'param': 'my'}, "Мои сериалы", is_folter=True),
+            MenuRow({'page': 'All', 'param': 'my'}, "Все сериалы", is_folter=True),
         ]
 
     def get_list(self, sid):
@@ -857,8 +864,8 @@ class SoapApi(object):
         data = self.client.request(self.SAVE_POSITION_URL.format(eid=eid), params)
         return isinstance(data, dict) and data.get('ok', 0) == 1
 
-    def get_play(self, all_episodes, params):
-        ep_data, img = all_episodes.get_episode(params)
+    def get_play(self, all_episodes, season, epnum, eid):
+        ep_data, img = all_episodes.get_episode(season, epnum, eid)
         data = self._get_video(**ep_data)
         li = xbmcgui.ListItem(data['title'], iconImage=img, thumbnailImage=img)
 
@@ -876,9 +883,45 @@ class SoapApi(object):
 
 
     def process(self, parts):
-        if len(parts) == 1:
+        if parts.page == 'Main' or parts.page is None:
             return self.main()
-        elif len(parts) == 2:
+        elif parts.page == 'My':
+            return self.get_serials('my')
+        elif parts.page == 'All':
+            return self.get_serials('all')
+        elif parts.page == 'Serial':
+            return self.get_serials(parts.sid)
+        elif parts.page == 'Episodes':
+            all_episodes = self.get_all_episodes(parts.sid)
+            
+            if parts.season is None:
+                if  all_episodes.count_seasons() > 1:
+                    rows = all_episodes.list_seasons()
+                    if self.config.reverse:
+                        rows = rows[::-1]
+                    return rows
+                
+                parts.season = str(all_episodes.first_season())
+                
+            rows = all_episodes.list_episodes(int(parts.season), self.config)
+            if self.config.reverse:
+                rows = rows[::-1]
+            return rows
+        elif parts.page == 'Play':
+            all_episodes = self.get_all_episodes(parts.sid)
+
+            if not self.get_play(all_episodes, parts.season, parts.epnum, parts.eid):
+                 parts.page = 'Episodes'
+                 
+                 rows = all_episodes.list_episodes(int(parts.season), self.config)
+                 if self.config.reverse:
+                     rows = rows[::-1]
+                 return rows
+
+        parts.clear()
+        return self.main()
+
+        '''elif len(parts) == 2:
             return self.get_serials(parts[-1])
         else:
             all_episodes = self.get_all_episodes(parts[2])
@@ -906,7 +949,7 @@ class SoapApi(object):
                          rows = rows[::-1]
                      return rows
             
-            return self.main()
+            return self.main()'''
 
 
 def kodi_draw_list(parts, rows):
@@ -914,19 +957,48 @@ def kodi_draw_list(parts, rows):
         xbmcplugin.addDirectoryItem(*row.item(parts))
 
     xbmcplugin.addSortMethod(h, xbmcplugin.SORT_METHOD_UNSORTED)
-    xbmcplugin.addSortMethod(h, xbmcplugin.SORT_METHOD_DATE)
-    xbmcplugin.addSortMethod(h, xbmcplugin.SORT_METHOD_DURATION)
-    xbmcplugin.addSortMethod(h, xbmcplugin.SORT_METHOD_GENRE)
-    xbmcplugin.addSortMethod(h, xbmcplugin.SORT_METHOD_TITLE)
-    xbmcplugin.addSortMethod(h, xbmcplugin.SORT_METHOD_VIDEO_RATING)
-    xbmcplugin.addSortMethod(h, xbmcplugin.SORT_METHOD_VIDEO_RUNTIME)
-    xbmcplugin.addSortMethod(h, xbmcplugin.SORT_METHOD_VIDEO_TITLE)
-    xbmcplugin.addSortMethod(h, xbmcplugin.SORT_METHOD_VIDEO_YEAR)
     xbmcplugin.addSortMethod(h, xbmcplugin.SORT_METHOD_LABEL)
+    xbmcplugin.addSortMethod(h, xbmcplugin.SORT_METHOD_VIDEO_RATING)
+    xbmcplugin.addSortMethod(h, xbmcplugin.SORT_METHOD_VIDEO_YEAR)
     xbmcplugin.endOfDirectory(h)
+
+class KodiUrl(object):
+    __slots__ = ('page', 'param', 'sid', 'season', 'epnum', 'eid')
+    
+    def __init__(self, params):
+        for key in self.__slots__:
+            setattr(self, key, params.get(key))
+
+    @classmethod
+    def init(cls):
+        url_params = sys.argv[2][1:]
+        
+        parts = url_params.split('&')
+        parts = filter(None, parts)
+        params = map(lambda x: x.split('=', 1), parts)
+        result = dict()
+        
+        for k, v in params:
+            result[urllib.unquote(k)] = urllib.unquote(v)
+        
+        return KodiUrl(result)
+    
+    def uri(self, link):
+        params = dict([
+            (key, link.get(key, getattr(self, key)))
+            for key in self.__slots__
+            if getattr(self, key) is not None or link.get(key) is not None
+        ])
+        
+        return sys.argv[0] + "?{0}".format(urllib.urlencode(params))
+    
+    def clear(self):
+        for key in self.__slots__:
+            setattr(self, key, None)
 
 def kodi_parse_uri():
     #print "Soap: " + sys.argv[2] + ' $$$$$$'
+    return [(a,urllib.unquote(b)) for (a, b) in [p.split('=', 1) for p in sss.split('&')]]
     return urllib.unquote(sys.argv[2])[6:].split("/")
 
 def debug(func):
@@ -949,7 +1021,7 @@ def debug(func):
 
 @debug
 def addon_main():
-    parts = kodi_parse_uri()
+    parts = KodiUrl.init()
     api = SoapApi()
 
     if not api.is_auth:
