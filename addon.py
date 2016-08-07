@@ -921,36 +921,6 @@ class SoapApi(object):
         parts.clear()
         return self.main()
 
-        '''elif len(parts) == 2:
-            return self.get_serials(parts[-1])
-        else:
-            all_episodes = self.get_all_episodes(parts[2])
-
-            if len(parts) == 3:
-                if all_episodes.count_seasons() > 1:
-                    rows = all_episodes.list_seasons()
-                    if self.config.reverse:
-                        rows = rows[::-1]
-                    return rows
-
-                parts.append(str(all_episodes.first_season()))
-
-            if len(parts) == 4:
-                rows = all_episodes.list_episodes(int(parts[3]), self.config)
-                if self.config.reverse:
-                    rows = rows[::-1]
-                return rows
-            
-            elif len(parts) == 5:
-                if not self.get_play(all_episodes, parts[-2:]):
-                     parts.pop(-1)
-                     rows = all_episodes.list_episodes(int(parts[3]), self.config)
-                     if self.config.reverse:
-                         rows = rows[::-1]
-                     return rows
-            
-            return self.main()'''
-
 
 def kodi_draw_list(parts, rows):
     for row in rows:
