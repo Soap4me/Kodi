@@ -6,7 +6,7 @@ import xbmc, xbmcgui, xbmcplugin, xbmcaddon
 import urllib, os, sys
 from collections import namedtuple
 
-__version__ = '1.0.1'
+__version__ = '1.0.2'
 __settings__ = xbmcaddon.Addon(id='plugin.video.soap4.me')
 
 DEBUG = False

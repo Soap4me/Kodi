@@ -1,3 +1,6 @@
+v1.0.2
+- Fix light tag for Kodi 15.x
+
 v1.0.1
 - Last 20 episodes
 - Covers for episodes
