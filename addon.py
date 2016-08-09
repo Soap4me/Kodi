@@ -592,6 +592,9 @@ def _color(color, text):
 def _light(text):
     return u"[LIGHT]{0}[/LIGHT]".format(text)
 
+if xbmc.__version__ < '2.24.0':
+    _light = lambda text: text
+
 class MenuRow(object):
     __slots__ = ('link', 'title', 'description', 'img', 'is_folder', 'is_watched', 'meta')
  
@@ -645,9 +648,10 @@ class MenuRow(object):
     
     @staticmethod
     def get_episode_num(episode):
-        return u'[LIGHT][COLOR=99CCAAAA]S{0}[/COLOR][COLOR=99AACCAA]E{1:02}[/COLOR][/LIGHT]'.format(
-            int(episode['season']), int(episode['episode'])
-        )
+        return _light(u'{0}{1}'.format(
+            _color(u"99CCAAAA", u"S{0}".format(int(episode['season']))),
+            _color(u"99AACCAA", u"E{0:02}".format(int(episode['episode'])))
+        ))
     
 
 
