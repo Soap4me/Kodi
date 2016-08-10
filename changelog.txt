@@ -1,3 +1,6 @@
+v1.0.3
+- Test repository
+
 v1.0.2
 - Fix light tag for Kodi 15.x
 

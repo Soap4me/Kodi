@@ -2,4 +2,5 @@ soap4me
 =======
 
 Kodi (xbmc) plugin for soap4.me
-Current version 1.0.2
+
+Current version 1.0.3
