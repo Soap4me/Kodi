@@ -464,14 +464,14 @@ class KodiConfig(object):
     
 class SoapConfig(object):
     def __init__(self):
-        self.quality = int(__addon__.getSetting('quality')) # 0 all, 1 SD, 2 720p, 3 FullHD
-        self.translate = int(__addon__.getSetting('translate')) # 0 all, 1 subs, 2 voice
-        self.audio =  int(__addon__.getSetting('audio')) == 1 # 0 all, 1 rus 2 orig
-        self.subtitle =  int(__addon__.getSetting('subtitle')) == 1 # 0 all, 1 rus 2 orig
-        self.reverse = int(__addon__.getSetting('sorting')) == 1 # 0 down, 1 up
+        self.quality = to_int(__addon__.getSetting('quality')) # 0 all, 1 SD, 2 720p, 3 FullHD
+        self.translate = to_int(__addon__.getSetting('translate')) # 0 all, 1 subs, 2 voice
+        self.audio =  to_int(__addon__.getSetting('audio')) == 1 # 0 all, 1 rus 2 orig
+        self.subtitle =  to_int(__addon__.getSetting('subtitle')) == 1 # 0 all, 1 rus 2 orig
+        self.reverse = to_int(__addon__.getSetting('sorting')) == 1 # 0 down, 1 up
         
     def _choice_quality(self, files):
-        qualities = set([int(f['quality']) for f in files])
+        qualities = set([to_int(f['quality']) for f in files])
 
         if self.quality != 0:
             if all(q > self.quality for q in qualities):
@@ -482,7 +482,7 @@ class SoapConfig(object):
         return qualities
     
     def _choice_translate(self, files):
-        translates = set([int(f['translate']) for f in files])
+        translates = set([to_int(f['translate']) for f in files])
 
         if self.audio == 2 and (len(translates) > 1 or 4 not in translates):
             translates = set( t for t in translates if t < 4 )
@@ -509,7 +509,7 @@ class SoapConfig(object):
         
         return [
             f for f in files
-            if int(f['translate']) in translates and int(f['quality']) in qualities
+            if to_int(f['translate']) in translates and to_int(f['quality']) in qualities
         ]
 
     @classmethod
@@ -1069,11 +1069,6 @@ def debug(func):
 @debug
 def addon_main():
     xbmc.log(repr(sys.argv))
-    
-    try:
-        s = SoapConfig()
-    except:
-        clean_cache()
     
     parts = KodiUrl.init()
     api = SoapApi()
