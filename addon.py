@@ -6,7 +6,7 @@ import xbmc, xbmcgui, xbmcplugin, xbmcaddon
 import urllib, os, sys
 from collections import namedtuple
 
-__version__ = '1.0.4'
+__version__ = '1.0.5'
 __settings__ = xbmcaddon.Addon(id='plugin.video.soap4.me')
 
 DEBUG = False
@@ -65,7 +65,7 @@ else:
 
 soappath = os.path.join(profile, "soap4me")
 
-if sys.argv[1] == 'clearcache':
+def clean_cache():
     if os.path.exists(soappath):
         shutil.rmtree(soappath)
     __addon__.setSetting('_token', '0')
@@ -74,6 +74,10 @@ if sys.argv[1] == 'clearcache':
     __addon__.setSetting('_token_till', '0')
     __addon__.setSetting('_token_check', '0')
     __addon__.setSetting('_message_till_days', '0')
+    
+
+if sys.argv[1] == 'clearcache':
+    clean_cache()
     message_ok('Done')
     exit(0)
 
@@ -1065,6 +1069,11 @@ def debug(func):
 @debug
 def addon_main():
     xbmc.log(repr(sys.argv))
+    
+    try:
+        s = SoapConfig()
+    except:
+        clean_cache()
     
     parts = KodiUrl.init()
     api = SoapApi()
