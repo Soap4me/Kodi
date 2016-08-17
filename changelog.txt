@@ -1,3 +1,6 @@
+v1.0.4
+- Add support for Kodi 13+
+
 v1.0.3
 - Test repository
 
