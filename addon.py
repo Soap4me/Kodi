@@ -6,7 +6,7 @@ import xbmc, xbmcgui, xbmcplugin, xbmcaddon
 import urllib, os, sys
 from collections import namedtuple
 
-__version__ = '1.0.6'
+__version__ = '1.0.7'
 __settings__ = xbmcaddon.Addon(id='plugin.video.soap4.me')
 
 DEBUG = False
@@ -74,15 +74,16 @@ def clean_cache():
     __addon__.setSetting('_token_till', '0')
     __addon__.setSetting('_token_check', '0')
     __addon__.setSetting('_message_till_days', '0')
-    
 
-if sys.argv[1] == 'clearcache':
-    clean_cache()
-    message_ok('Done')
-    exit(0)
+ACTIONS = (
+    'clearcache',
+    'watch',
+    'unwatch'
+)
 
-h = int(sys.argv[1])
-xbmcplugin.setPluginFanart(h, fanart)
+if sys.argv[1] not in ACTIONS:
+    h = int(sys.argv[1])
+    xbmcplugin.setPluginFanart(h, fanart)
 
 
 class SoapException(Exception):
@@ -288,6 +289,10 @@ class SoapCache(object):
         cache_id = filter(lambda c: c not in ",./", cache_id)
         filename = os.path.join(self.path, str(cache_id))
         os.remove(filename)
+        
+    def rmall(self):
+        shutil.rmtree(self.path)
+        os.makedirs(self.path)
 
 
 class SoapCookies(object):
@@ -403,6 +408,9 @@ class SoapHttpClient(SoapCookies):
         
     def clean(self, url):
         self.cache.rm(url)
+        
+    def clean_all(self):
+        self.cache.rmall()
 
 
 to_int = lambda s: int(s) if s != '' else 0
@@ -600,9 +608,10 @@ if xbmc.__version__ < '2.24.0':
     _light = lambda text: text
 
 class MenuRow(object):
-    __slots__ = ('link', 'title', 'description', 'img', 'is_folder', 'is_watched', 'meta')
+    __slots__ = ('link', 'title', 'description', 'img', 'is_folder', 'is_watched', 'meta', 'context')
  
-    def __init__(self, link, title, description='', img=None, is_folder=False, is_watched=False, meta=None):
+    def __init__(self, link, title, description='', img=None,
+                 is_folder=False, is_watched=False, meta=None, context=None):
         self.link = link
         self.title = title
         self.description = description
@@ -610,6 +619,7 @@ class MenuRow(object):
         self.is_folder = is_folder
         self.is_watched = is_watched
         self.meta = meta
+        self.context=context
 
     def item(self, parts):
         info = {}
@@ -631,6 +641,10 @@ class MenuRow(object):
             info.update(self.meta)
             
         li.setInfo(type=vtype, infoLabels=info)
+        
+        if self.context:
+            li.addContextMenuItems(self.context)
+        
 
         return h, parts.uri(self.link), li, bool(self.is_folder)
 
@@ -664,6 +678,13 @@ class SoapSerial(object):
         self.sid = sid
         self.data = data
         
+    def get_context(self):
+        return [
+            (u'Начать смотреть', u'RunScript(plugin.video.soap4.me, watch, {0})'.format(self.sid))
+            if self.data.get('watching', 0) == 0 else
+            (u'Прекратить смотреть', u'RunScript(plugin.video.soap4.me, unwatch, {0})'.format(self.sid))
+        ]
+        
     def menu(self):
         # TODO Use english/russian
         title = self.data['title']
@@ -685,7 +706,8 @@ class SoapSerial(object):
             self.data.get('description'),
             img=self.data['covers']['big'],
             is_folder=True,
-            meta=meta
+            meta=meta,
+            context=self.get_context()
         )
 
 class SoapEpisode(object):
@@ -820,6 +842,11 @@ class SoapApi(object):
         'all_last': '/episodes/new/',
         'my_last': '/episodes/new/my/',
     }
+    
+    WATCHING_URL = {
+        'watch': '/soap/watch/{sid}/',
+        'unwatch': '/soap/unwatch/{sid}/'
+    }
         
     PLAY_EPISODES_URL = '/play/episode/{eid}/'
     SAVE_POSITION_URL = '/play/episode/{eid}/savets/'
@@ -950,7 +977,20 @@ class SoapApi(object):
         sv.play()
 
         return True
-
+    
+    def set_watching(self, sid, event):
+        params = {
+            'sid': sid
+        }
+        data = self.client.request(self.WATCHING_URL[event].format(sid=sid), params)
+        
+        if not isinstance(data, dict):
+            return False, u'Bad response'
+        
+        if data.get('ok', 0) == 1:
+            return True, None
+        
+        return False, data.get('msg')
 
     def process(self, parts):
         if parts.page == 'Main' or parts.page is None:
@@ -1066,10 +1106,11 @@ def debug(func):
 
     return wrapper
 
+
+xbmc.log(repr(sys.argv))
+
 @debug
 def addon_main():
-    xbmc.log(repr(sys.argv))
-    
     parts = KodiUrl.init()
     api = SoapApi()
 
@@ -1083,6 +1124,31 @@ def addon_main():
 
     if rows is not None:
         kodi_draw_list(parts, rows)
+
+if sys.argv[1] == 'clearcache':
+    clean_cache()
+    message_ok('Done')
+    exit(0)
+    
+if sys.argv[1] == u'watch' or sys.argv[1] == u'unwatch':
+    api = SoapApi()
+
+    if not api.is_auth:
+        message_error(u'Ошибка авторизации')
+
+    sid =  to_int(sys.argv[2])
+    res, msg = api.set_watching(sid, sys.argv[1])
+    api.client.clean_all()
+    xbmc.executebuiltin('Container.Refresh')
+
+    if res:
+        message_ok(u'Выполнено')
+    else:
+        message_error(u'Ошибка: {0}'.format(msg))
+
+    exit(0)
+
+
 
 addon_main()
 

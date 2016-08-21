@@ -1,3 +1,6 @@
+v1.0.7
+- Add watching/unwatching menu
+
 v1.0.6
 - Fix bug with first usage
 
