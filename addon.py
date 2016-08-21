@@ -4,6 +4,7 @@
 
 import xbmc, xbmcgui, xbmcplugin, xbmcaddon
 import urllib, os, sys
+import datetime as dt
 from collections import namedtuple
 
 __version__ = '1.0.7'
@@ -627,6 +628,7 @@ class MenuRow(object):
         info['plot'] = self.description or ''
 
         vtype = 'video'
+        
 
         li = xbmcgui.ListItem(
             label=self.title,
@@ -680,9 +682,9 @@ class SoapSerial(object):
         
     def get_context(self):
         return [
-            (u'Начать смотреть', u'RunScript(plugin.video.soap4.me, watch, {0})'.format(self.sid))
+            (u'Добавить в пои сериалы', u'RunScript(plugin.video.soap4.me, watch, {0})'.format(self.sid))
             if self.data.get('watching', 0) == 0 else
-            (u'Прекратить смотреть', u'RunScript(plugin.video.soap4.me, unwatch, {0})'.format(self.sid))
+            (u'Убрать из моих сериалов', u'RunScript(plugin.video.soap4.me, unwatch, {0})'.format(self.sid))
         ]
         
     def menu(self):
@@ -699,6 +701,10 @@ class SoapSerial(object):
             'Country': self.data.get('country'),
             'ChannelName': self.data.get('network'),
         }
+        
+        if self.data.get('updated'):
+            ts = dt.datetime.fromtimestamp(float(self.data.get('updated', 0)))
+            meta['Date'] = ts.strftime('%d-%m-%Y')
         
         return MenuRow(
             {'page': 'Episodes', 'sid': str(self.sid)},
@@ -873,12 +879,18 @@ class SoapApi(object):
     
     def my_menu(self):
         return [
-            MenuRow({'page': 'MyLast'}, _color('FFFFFFAA', u"Последние 20 эпизодов"), is_folder=True)
+            MenuRow({'page': 'MyLast'}, _color('FFFFFFAA', u"Последние 20 эпизодов"), is_folder=True,
+                    meta={
+                        'Date': (dt.datetime.now() + dt.timedelta(days=365)).strftime('%d-%m-%Y')
+                    })
         ]
 
     def all_menu(self):
         return [
-            MenuRow({'page': 'AllLast'}, _color('FFFFFFAA', u"Последние 20 эпизодов"), is_folder=True)
+            MenuRow({'page': 'AllLast'}, _color('FFFFFFAA', u"Последние 20 эпизодов"), is_folder=True,
+                    meta={
+                        'Date': (dt.datetime.now() + dt.timedelta(days=365)).strftime('%d-%m-%Y')
+                    })
         ]
 
     def get_list(self, sid):
@@ -1047,6 +1059,7 @@ def kodi_draw_list(parts, rows):
     xbmcplugin.addSortMethod(h, xbmcplugin.SORT_METHOD_LABEL)
     xbmcplugin.addSortMethod(h, xbmcplugin.SORT_METHOD_VIDEO_RATING)
     xbmcplugin.addSortMethod(h, xbmcplugin.SORT_METHOD_VIDEO_YEAR)
+    xbmcplugin.addSortMethod(h, xbmcplugin.SORT_METHOD_DATE)
     xbmcplugin.endOfDirectory(h)
 
 class KodiUrl(object):
