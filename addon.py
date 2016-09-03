@@ -7,7 +7,7 @@ import urllib, os, sys
 import datetime as dt
 from collections import namedtuple
 
-__version__ = '1.0.7'
+__version__ = '1.0.8'
 __settings__ = xbmcaddon.Addon(id='plugin.video.soap4.me')
 
 DEBUG = False
@@ -367,6 +367,7 @@ class SoapHttpClient(SoapCookies):
         req = urllib2.Request(self.HOST + url)
         req.add_header('User-Agent', 'Kodi: plugin.soap4me v{0}'.format(__version__))
         req.add_header('Accept-encoding', 'gzip')
+        req.add_header('Kodi-Debug', '{0} {1}'.format(xbmc.getInfoLabel('System.BuildVersion'), sys.argv[1]))
 
         if self.token is not None:
             self._cookies_load(req)
@@ -847,6 +848,7 @@ class SoapApi(object):
         'my': '/soap/my/',
         'all_last': '/episodes/new/',
         'my_last': '/episodes/new/my/',
+        'continue': '/episodes/continue/',
     }
     
     WATCHING_URL = {
@@ -875,6 +877,7 @@ class SoapApi(object):
         return [
             MenuRow({'page': 'My', 'param': 'my'}, u"Мои сериалы", is_folder=True),
             MenuRow({'page': 'All', 'param': 'my'}, u"Все сериалы", is_folder=True),
+            MenuRow({'page': 'Continue', 'param': 'my'}, u"Досмотреть начатое", is_folder=True),
         ]
     
     def my_menu(self):
@@ -893,14 +896,14 @@ class SoapApi(object):
                     })
         ]
 
-    def get_list(self, sid):
+    def get_list(self, sid, use_cache=True):
         if sid in self.LISTS_URL:
             url = self.LISTS_URL[sid]
         else:
             url = self.EPISODES_URL.format(sid)
 
         def _request():
-            data = self.client.request(url, use_cache=True)
+            data = self.client.request(url, use_cache=use_cache)
             
             if isinstance(data, dict) \
                     and data.get('ok', 'None') == 0 \
@@ -938,6 +941,16 @@ class SoapApi(object):
             rows.extend(SoapEpisode(data).menu(config, True))
             
         return rows
+
+    def get_continue_episodes(self):
+        rows = list()
+        config = SoapConfig()
+        
+        for data in self.get_list('continue', use_cache=False):
+            rows.extend(SoapEpisode(data).menu(config, True))
+            
+        return rows
+
 
     def _get_video(self, sid, eid, ehash):
         myhash = hashlib.md5(
@@ -1017,6 +1030,8 @@ class SoapApi(object):
                    self.get_serials('all')
         elif parts.page == 'AllLast':
             return self.get_last_episodes('all')
+        elif parts.page == 'Continue':
+            return self.get_continue_episodes()
 
         elif parts.page == 'Serial':
             return self.get_serials(parts.sid)

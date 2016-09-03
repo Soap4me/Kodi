@@ -1,3 +1,6 @@
+v1.0.8
+- Add last episodes menu
+
 v1.0.7
 - Add watching/unwatching menu
 - Add sorting method by last episode
