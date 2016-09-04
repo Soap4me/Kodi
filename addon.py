@@ -7,7 +7,13 @@ import urllib, os, sys
 import datetime as dt
 from collections import namedtuple
 
-__version__ = '1.0.8'
+try:
+    import ssl
+    ssl._create_default_https_context = ssl._create_unverified_context
+except:
+    pass
+
+__version__ = '1.0.9'
 __settings__ = xbmcaddon.Addon(id='plugin.video.soap4.me')
 
 DEBUG = False

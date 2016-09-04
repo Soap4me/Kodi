@@ -1,3 +1,6 @@
+v1.0.9
+- Add support Kodi 17
+
 v1.0.8
 - Add last episodes menu
 
