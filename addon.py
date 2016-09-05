@@ -159,7 +159,7 @@ class SoapPlayer(xbmc.Player):
         """Will be called when user resumes a paused file."""
         return super(SoapPlayer, self).onPlayBackResumed()
 
-    def is_soap_play(self):
+    def is_soap_play(self, url):
         try:
             self.watched_time = self.getTime()
             self.total_time = self.getTotalTime()
@@ -168,7 +168,7 @@ class SoapPlayer(xbmc.Player):
                 self.ontime_callback(self.watched_time)
         except:
             pass
-        return not self.is_start or self.isPlaying()
+        return not self.is_start or (self.isPlaying() and url in self.getPlayingFile())
 
 
 class SoapVideo(object):
@@ -259,7 +259,10 @@ class SoapVideo(object):
 
         self.li.setProperty('StartOffset', str(pos))
         p.play(self.url, self.li)
-        while p.is_soap_play() and not xbmc.abortRequested:
+        
+        xbmc.sleep(1000)
+        
+        while p.is_soap_play(self.url) and not xbmc.abortRequested:
             xbmc.sleep(1000)
 
         return
@@ -368,6 +371,7 @@ class SoapHttpClient(SoapCookies):
         return urllib.urlencode(params)
 
     def _request(self, url, params=None):
+        xbmc.log('REQUEST: {0} {1} {2}'.format(url, params, sys.argv[1]))
         self._cookies_init()
 
         req = urllib2.Request(self.HOST + url)
@@ -519,7 +523,6 @@ class SoapConfig(object):
         return translates
 
     def filter_files(self, files):
-        xbmc.log('FILTER ' + repr(files))
         translates = self._choice_translate(files)
         qualities = self._choice_quality(files)
         
