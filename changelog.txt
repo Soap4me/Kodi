@@ -1,3 +1,6 @@
+v1.0.10
+- Fix nasty bug with Player
+
 v1.0.9
 - Add support Kodi 17
 
