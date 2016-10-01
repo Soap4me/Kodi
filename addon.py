@@ -666,6 +666,13 @@ class MenuRow(object):
             return u"  " + _color("AAAAAAAA", _light("({0})".format(count)))
         else:
             return ""
+
+    @staticmethod
+    def count_watching(count):
+        if count > 0:
+            return u"  " + _color("AAAAAAAA", _light(u"({0} просмотров)".format(count)))
+        else:
+            return ""
         
     @staticmethod
     def get_meta_title(episode_file):
@@ -715,7 +722,10 @@ class SoapSerial(object):
         if self.data.get('updated'):
             ts = dt.datetime.fromtimestamp(float(self.data.get('updated', 0)))
             meta['Date'] = ts.strftime('%d-%m-%Y')
-        
+
+        if self.data.get('count'):
+            title += MenuRow.count_watching(int(self.data.get('count')))
+            
         return MenuRow(
             {'page': 'Episodes', 'sid': str(self.sid)},
             title,
@@ -858,6 +868,7 @@ class SoapApi(object):
         'all_last': '/episodes/new/',
         'my_last': '/episodes/new/my/',
         'continue': '/episodes/continue/',
+        'alive_for_me': '/soap/top/alive/?exclude=my'
     }
     
     WATCHING_URL = {
@@ -887,6 +898,7 @@ class SoapApi(object):
             MenuRow({'page': 'My', 'param': 'my'}, u"Мои сериалы", is_folder=True),
             MenuRow({'page': 'All', 'param': 'my'}, u"Все сериалы", is_folder=True),
             MenuRow({'page': 'Continue', 'param': 'my'}, u"Досмотреть начатое", is_folder=True),
+            MenuRow({'page': 'AliveForMe', 'param': 'my'}, u"Что еще посмотреть?", is_folder=True),
         ]
     
     def my_menu(self):
@@ -1037,6 +1049,9 @@ class SoapApi(object):
         elif parts.page == 'All':
             return self.all_menu() + \
                    self.get_serials('all')
+        elif parts.page == 'AliveForMe':
+            return self.get_serials('alive_for_me')
+
         elif parts.page == 'AllLast':
             return self.get_last_episodes('all')
         elif parts.page == 'Continue':
