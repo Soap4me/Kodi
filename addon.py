@@ -717,6 +717,7 @@ class SoapSerial(object):
             'Year': self.data.get('year'),
             'Country': self.data.get('country'),
             'ChannelName': self.data.get('network'),
+            'PlayCount': 0 if (self.data.get('unwatched', 0) > 0) else 1,
         }
         
         if self.data.get('updated'):
