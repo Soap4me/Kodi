@@ -489,7 +489,8 @@ class SoapConfig(object):
         self.audio =  to_int(__addon__.getSetting('audio')) == 1 # 0 all, 1 rus 2 orig
         self.subtitle =  to_int(__addon__.getSetting('subtitle')) == 1 # 0 all, 1 rus 2 orig
         self.reverse = to_int(__addon__.getSetting('sorting')) == 1 # 0 down, 1 up
-        
+        self.list_unwatched_season = __addon__.getSetting('list_unwatched_season') == "true"
+
     def _choice_quality(self, files):
         qualities = set([to_int(f['quality']) for f in files])
 
@@ -498,9 +499,9 @@ class SoapConfig(object):
                 qualities = set([min(qualities)])
             else:
                 qualities = set([max([q for q in qualities if q <= self.quality])])
-                
+
         return qualities
-    
+
     def _choice_translate(self, files):
         translates = set([to_int(f['translate']) for f in files])
 
@@ -510,22 +511,22 @@ class SoapConfig(object):
         if self.translate != 0:
             if self.translate == 1 and (2 in translates or 3 in translates):
                 translates = set(t for t in translates if t in (2, 3))
-                
+
                 if self.subtitle != 0:
                     if self.subtitle == 1 and 3 in translates:
                         translates = set([3])
                     elif self.subtitle == 2 and 2 in translates:
                         translates = set([2])
-                        
+
             if self.translate == 2 and 4 in translates:
                 translates = set([4])
-                
+
         return translates
 
     def filter_files(self, files):
         translates = self._choice_translate(files)
         qualities = self._choice_quality(files)
-        
+
         return [
             f for f in files
             if to_int(f['translate']) in translates and to_int(f['quality']) in qualities
@@ -539,7 +540,7 @@ class SoapConfig(object):
             return '720p'
         elif quality == 3:
             return 'FullHD'
-        
+
     @classmethod
     def name_translate(cls, translate):
         if translate == 1:
@@ -550,12 +551,12 @@ class SoapConfig(object):
             return 'RusSubs'
         elif translate == 4:
             return u'Перевод'
-        
-    
+
+
 class SoapAuth(object):
     AUTH_URL = '/auth/'
     CHECK_URL = '/auth/check/'
-    
+
     def __init__(self, client):
         self.client = client
         self.is_auth = False
@@ -570,7 +571,7 @@ class SoapAuth(object):
 
         KodiConfig.soap_set_auth(data)
         return True
-        
+
     def check(self):
         params = KodiConfig.soap_get_auth()
 
@@ -582,9 +583,9 @@ class SoapAuth(object):
 
         if params['token_till'] + 10 < time.time():
             return False
-        
+
         self.client.set_token(params['token'])
-        
+
         if params['token_check'] > time.time():
             return True
 
@@ -594,17 +595,17 @@ class SoapAuth(object):
             return True
 
         return False
-        
+
     def auth(self):
         if not self.check():
             if not self.login():
                 return False
-            
+
         params = KodiConfig.soap_get_auth()
         if not params['token']:
             message_error("Auth error")
             return False
-                
+
         self.client.set_token(params['token'])
         self.is_auth = True
 
@@ -620,7 +621,7 @@ if xbmc.__version__ < '2.24.0':
 
 class MenuRow(object):
     __slots__ = ('link', 'title', 'description', 'img', 'is_folder', 'is_watched', 'meta', 'context')
- 
+
     def __init__(self, link, title, description='', img=None,
                  is_folder=False, is_watched=False, meta=None, context=None):
         self.link = link
@@ -638,25 +639,25 @@ class MenuRow(object):
         info['plot'] = self.description or ''
 
         vtype = 'video'
-        
+
 
         li = xbmcgui.ListItem(
             label=self.title,
-            
+
             iconImage=str(self.img),
             thumbnailImage=str(self.img)
         )
         if self.is_watched:
             info["playcount"] = 10
-            
+
         if self.meta and isinstance(self.meta, dict):
             info.update(self.meta)
-            
+
         li.setInfo(type=vtype, infoLabels=info)
-        
+
         if self.context:
             li.addContextMenuItems(self.context)
-        
+
 
         return h, parts.uri(self.link), li, bool(self.is_folder)
 
@@ -673,7 +674,7 @@ class MenuRow(object):
             return u"  " + _color("AAAAAAAA", _light(u"({0} просмотров)".format(count)))
         else:
             return ""
-        
+
     @staticmethod
     def get_meta_title(episode_file):
         quality = u"[{0}]".format(SoapConfig.name_quality(int(episode_file['quality'])))
@@ -682,34 +683,34 @@ class MenuRow(object):
             _color("AAAACCAA", quality),
             _color("AAAAAACC", translate)
         ))
-    
+
     @staticmethod
     def get_episode_num(episode):
         return _light(u'{0}{1}'.format(
             _color(u"99CCAAAA", u"S{0}".format(int(episode['season']))),
             _color(u"99AACCAA", u"E{0:02}".format(int(episode['episode'])))
         ))
-    
+
 
 
 class SoapSerial(object):
     def __init__(self, sid, data=None):
         self.sid = sid
         self.data = data
-        
+
     def get_context(self):
         return [
             (u'Добавить в пои сериалы', u'RunScript(plugin.video.soap4.me, watch, {0})'.format(self.sid))
             if self.data.get('watching', 0) == 0 else
             (u'Убрать из моих сериалов', u'RunScript(plugin.video.soap4.me, unwatch, {0})'.format(self.sid))
         ]
-        
+
     def menu(self):
         # TODO Use english/russian
         title = self.data['title']
         if self.data.get('unwatched', 0) > 0:
             title += MenuRow.get_new(self.data['unwatched'])
-        
+
         meta = {
             'IMDBNumber': self.data.get('imdb_id'),
             'Votes': self.data.get('imdb_votes'),
@@ -717,15 +718,16 @@ class SoapSerial(object):
             'Year': self.data.get('year'),
             'Country': self.data.get('country'),
             'ChannelName': self.data.get('network'),
+            'PlayCount': 0 if (self.data.get('unwatched', 0) > 0) else 1,
         }
-        
+
         if self.data.get('updated'):
             ts = dt.datetime.fromtimestamp(float(self.data.get('updated', 0)))
             meta['Date'] = ts.strftime('%d-%m-%Y')
 
         if self.data.get('count'):
             title += MenuRow.count_watching(int(self.data.get('count')))
-            
+
         return MenuRow(
             {'page': 'Episodes', 'sid': str(self.sid)},
             title,
@@ -752,23 +754,23 @@ class SoapEpisode(object):
                         )
         if with_soapname:
             label = u"{soapname}: {label}".format(soapname=self.soapname(), label=label)
-            
+
         return label
-    
+
     def soapname(self):
         return self.data['soap'].replace('&#039;', "'").replace("&amp;", "&").replace('&quot;','"')
-    
+
     def title(self):
         return self.data['title_en'].replace('&#039;', "'").replace("&amp;", "&").replace('&quot;','"')
-    
+
     def is_watched(self):
         return self.data.get('watched', 0) == 1
-    
+
     def get_hash(self, eid):
         for f in self.data['files']:
             if int(f['eid']) == eid:
                 return f['hash']
-    
+
     def menu(self, config, with_soapname=False):
         files = config.filter_files(self.data['files'])
 
@@ -787,7 +789,7 @@ class SoapEpisode(object):
                 is_watched=self.is_watched()
             ) for f in files
         ]
-        
+
 
 class SoapEpisodes(object):
     def __init__(self, sid, data=None):
@@ -798,7 +800,7 @@ class SoapEpisodes(object):
             (int(cover['season']), cover['big'])
             for cover in data.get('covers', list())
         )
-        
+
         for row in data['episodes']:
             season = int(row['season'])
             epnum = int(row['episode'])
@@ -806,12 +808,18 @@ class SoapEpisodes(object):
 
         self.seasons = list(self.episodes.keys())
         self.seasons.sort()
-                
+
     def count_seasons(self):
         return len(self.episodes)
-    
+
+    def count_unwatched_seasons(self):
+        return len(filter(self.is_unwatched_season, self.episodes))
+
     def first_season(self):
         return self.seasons[0]
+
+    def first_unwatched_season(self):
+        return next(s for s in self.seasons if self.is_unwatched_season(s))
 
     def list_seasons(self):
         return [
@@ -828,40 +836,42 @@ class SoapEpisodes(object):
             for season in self.seasons
         ]
 
-        
+
     def list_episodes(self, season, config):
         if season not in self.episodes:
             #TODO show error
             raise Exception
-        
+
         episodes = self.episodes[season].keys()
         episodes.sort()
 
-        
+
         rows = list()
 
         for episode_num in episodes:
             rows.extend(self.episodes[season][episode_num].menu(config))
-            
+
         return rows
-    
+
     def get_episode(self, season, epnum, eid):
         season = int(season)
         num = int(epnum)
         eid = int(eid)
         ehash = self.episodes[season][num].get_hash(eid)
-        
+
         return {
             'sid': self.sid,
             'eid': eid,
             'ehash': ehash
         }, self.covers.get(season)
-        
-        
+
+    def is_unwatched_season(self, season):
+        return not all(ep.is_watched() for ep in self.episodes[season].values())
+
 
 class SoapApi(object):
     EPISODES_URL = '/episodes/{0}/'
-    
+
     LISTS_URL = {
         'all': '/soap/',
         'my': '/soap/my/',
@@ -870,16 +880,16 @@ class SoapApi(object):
         'continue': '/episodes/continue/',
         'alive_for_me': '/soap/top/alive/?exclude=my'
     }
-    
+
     WATCHING_URL = {
         'watch': '/soap/watch/{sid}/',
         'unwatch': '/soap/unwatch/{sid}/'
     }
-        
+
     PLAY_EPISODES_URL = '/play/episode/{eid}/'
     SAVE_POSITION_URL = '/play/episode/{eid}/savets/'
     MARK_WATCHED = '/episodes/watch/{eid}/'
-    
+
     def __init__(self):
         self.client = SoapHttpClient()
         self.auth = SoapAuth(self.client)
@@ -893,14 +903,14 @@ class SoapApi(object):
 
     def main(self):
         KodiConfig.message_till_days()
-        
+
         return [
             MenuRow({'page': 'My', 'param': 'my'}, u"Мои сериалы", is_folder=True),
             MenuRow({'page': 'All', 'param': 'my'}, u"Все сериалы", is_folder=True),
             MenuRow({'page': 'Continue', 'param': 'my'}, u"Досмотреть начатое", is_folder=True),
             MenuRow({'page': 'AliveForMe', 'param': 'my'}, u"Что еще посмотреть?", is_folder=True),
         ]
-    
+
     def my_menu(self):
         return [
             MenuRow({'page': 'MyLast'}, _color('FFFFFFAA', u"Последние 20 эпизодов"), is_folder=True,
@@ -925,13 +935,13 @@ class SoapApi(object):
 
         def _request():
             data = self.client.request(url, use_cache=use_cache)
-            
+
             if isinstance(data, dict) \
                     and data.get('ok', 'None') == 0 \
                     and data.get('error', '') != '':
                 self.client.clean(url)
                 return False
-            
+
             return data
 
         data = _request()
@@ -952,24 +962,24 @@ class SoapApi(object):
 
     def get_all_episodes(self, sid):
         return SoapEpisodes(sid, self.get_list(sid))
-    
-    
+
+
     def get_last_episodes(self, type):
         rows = list()
         config = SoapConfig()
-        
+
         for data in self.get_list(type + "_last"):
             rows.extend(SoapEpisode(data).menu(config, True))
-            
+
         return rows
 
     def get_continue_episodes(self):
         rows = list()
         config = SoapConfig()
-        
+
         for data in self.get_list('continue', use_cache=False):
             rows.extend(SoapEpisode(data).menu(config, True))
-            
+
         return rows
 
 
@@ -986,7 +996,7 @@ class SoapApi(object):
             "hash": myhash
         }
         result = self.client.request(self.PLAY_EPISODES_URL.format(eid=eid), data)
-        
+
         if not isinstance(result, dict) or result.get("ok", 0) == 0:
             raise SoapException("Bad getting videolink")
 
@@ -1023,19 +1033,19 @@ class SoapApi(object):
         sv.play()
 
         return True
-    
+
     def set_watching(self, sid, event):
         params = {
             'sid': sid
         }
         data = self.client.request(self.WATCHING_URL[event].format(sid=sid), params)
-        
+
         if not isinstance(data, dict):
             return False, u'Bad response'
-        
+
         if data.get('ok', 0) == 1:
             return True, None
-        
+
         return False, data.get('msg')
 
     def process(self, parts):
@@ -1061,16 +1071,16 @@ class SoapApi(object):
             return self.get_serials(parts.sid)
         elif parts.page == 'Episodes':
             all_episodes = self.get_all_episodes(parts.sid)
-            
+
             if parts.season is None:
-                if  all_episodes.count_seasons() > 1:
+                list_unwatched_season = self.config.list_unwatched_season
+                if  all_episodes.count_seasons() > 1 and (not list_unwatched_season or all_episodes.count_unwatched_seasons() > 1):
                     rows = all_episodes.list_seasons()
                     if self.config.reverse:
                         rows = rows[::-1]
                     return rows
-                
-                parts.season = str(all_episodes.first_season())
-                
+                parts.season = str(all_episodes.first_unwatched_season() if list_unwatched_season else all_episodes.first_season())
+
             rows = all_episodes.list_episodes(int(parts.season), self.config)
             if self.config.reverse:
                 rows = rows[::-1]
