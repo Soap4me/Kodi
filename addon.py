@@ -489,7 +489,7 @@ class SoapConfig(object):
         self.audio =  to_int(__addon__.getSetting('audio')) == 1 # 0 all, 1 rus 2 orig
         self.subtitle =  to_int(__addon__.getSetting('subtitle')) == 1 # 0 all, 1 rus 2 orig
         self.reverse = to_int(__addon__.getSetting('sorting')) == 1 # 0 down, 1 up
-        self.list_unwatched_season = __addon__.getSetting('list_unwatched_season') == "true"
+        self.list_unwatched_season = __addon__.getSetting('list_unwatched_season') == 'true'
 
     def _choice_quality(self, files):
         qualities = set([to_int(f['quality']) for f in files])
@@ -1073,13 +1073,19 @@ class SoapApi(object):
             all_episodes = self.get_all_episodes(parts.sid)
 
             if parts.season is None:
-                list_unwatched_season = self.config.list_unwatched_season
-                if  all_episodes.count_seasons() > 1 and (not list_unwatched_season or all_episodes.count_unwatched_seasons() > 1):
+                if self.config.list_unwatched_season and all_episodes.count_unwatched_seasons() >= 1:
+                    try:
+                        parts.season = str(all_episodes.first_unwatched_season())
+                    except StopIteration:
+                        pass
+                    
+            if parts.season is None:
+                if  all_episodes.count_seasons() > 1:
                     rows = all_episodes.list_seasons()
                     if self.config.reverse:
                         rows = rows[::-1]
                     return rows
-                parts.season = str(all_episodes.first_unwatched_season() if list_unwatched_season else all_episodes.first_season())
+                parts.season = all_episodes.first_season()
 
             rows = all_episodes.list_episodes(int(parts.season), self.config)
             if self.config.reverse:
