@@ -1,3 +1,6 @@
+v1.0.12
+- Add setting for auto open first unwatched season (by eschava)
+
 v1.0.11
 - Add top alive serials
 
