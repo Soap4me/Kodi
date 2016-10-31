@@ -700,7 +700,7 @@ class SoapSerial(object):
 
     def get_context(self):
         return [
-            (u'Добавить в пои сериалы', u'RunScript(plugin.video.soap4.me, watch, {0})'.format(self.sid))
+            (u'Добавить в мои сериалы', u'RunScript(plugin.video.soap4.me, watch, {0})'.format(self.sid))
             if self.data.get('watching', 0) == 0 else
             (u'Убрать из моих сериалов', u'RunScript(plugin.video.soap4.me, unwatch, {0})'.format(self.sid))
         ]
