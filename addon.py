@@ -202,13 +202,18 @@ class SoapVideo(object):
         dialog = xbmcgui.Dialog()
         ret = dialog.select(u'Воспроизвести', [u'С {0}'.format(get_time(pos)), u'Сначала'])
 
-        if ret != 0:
+        if ret < 0:  # cancel
+            pos = -1
+        elif ret == 1:  # from the begin
             pos = 0
 
         return pos
 
     def play(self):
         pos = self.get_pos()
+
+        if pos < 0:  # cancel
+            return
 
         p = SoapPlayer()
 
