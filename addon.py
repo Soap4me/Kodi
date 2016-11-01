@@ -85,7 +85,9 @@ def clean_cache():
 ACTIONS = (
     'clearcache',
     'watch',
-    'unwatch'
+    'unwatch',
+    'mark_watched',
+    'mark_unwatched'
 )
 
 if sys.argv[1] not in ACTIONS:
@@ -146,7 +148,7 @@ class SoapPlayer(xbmc.Player):
             self.end_callback()
         elif self.watched_time:
             self.stop_callback(self.watched_time)
-            
+
         return super(SoapPlayer, self).onPlayBackStopped()
 
     def onPlayBackPaused(self):
@@ -259,9 +261,9 @@ class SoapVideo(object):
 
         self.li.setProperty('StartOffset', str(pos))
         p.play(self.url, self.li)
-        
+
         xbmc.sleep(1000)
-        
+
         while p.is_soap_play(self.url) and not xbmc.abortRequested:
             xbmc.sleep(1000)
 
@@ -299,7 +301,7 @@ class SoapCache(object):
         cache_id = filter(lambda c: c not in ",./", cache_id)
         filename = os.path.join(self.path, str(cache_id))
         os.remove(filename)
-        
+
     def rmall(self):
         shutil.rmtree(self.path)
         os.makedirs(self.path)
@@ -355,19 +357,19 @@ class SoapCookies(object):
 
 class SoapHttpClient(SoapCookies):
     HOST = 'https://api.soap4.me/v2'
-    
+
     def __init__(self):
         self.token = None
         self.cache = SoapCache(soappath, 5)
         SoapCookies.__init__(self)
-        
+
     def set_token(self, token):
         self.token = token
-     
+
     def _post_data(self, params=None):
         if not isinstance(params, dict):
             return None
-       
+
         return urllib.urlencode(params)
 
     def _request(self, url, params=None):
@@ -399,17 +401,17 @@ class SoapHttpClient(SoapCookies):
         else:
             text = response.read()
             response.close()
-            
+
         return text
-        
+
     def request(self, url, params=None, use_cache=False):
         text = None
         if use_cache:
             text = self.cache.get(url)
-        
+
         if text is None or not text :
             text = self._request(url, params)
-            
+
             if use_cache:
                 self.cache.set(url, text)
 
@@ -417,10 +419,10 @@ class SoapHttpClient(SoapCookies):
             return json.loads(text)
         except:
             return text
-        
+
     def clean(self, url):
         self.cache.rm(url)
-        
+
     def clean_all(self):
         self.cache.rmall()
 
@@ -431,7 +433,7 @@ to_int = lambda s: int(s) if s != '' else 0
 class KodiConfig(object):
     @classmethod
     def soap_get_auth(cls):
-        
+
         return {
             'token': __addon__.getSetting('_token'),
             'token_sid': __addon__.getSetting('_token_sid'),
@@ -440,7 +442,7 @@ class KodiConfig(object):
             'token_check': to_int(__addon__.getSetting('_token_check')),
             'message_till_days': to_int(__addon__.getSetting('_message_till_days'))
         }
-    
+
     @classmethod
     def soap_set_auth(cls, params):
         __addon__.setSetting('_token', params.get('token', ''))
@@ -448,7 +450,7 @@ class KodiConfig(object):
         __addon__.setSetting('_token_sid', str(params.get('sid', '')))
         __addon__.setSetting('_message_till_days', '')
         cls.soap_set_token_valid()
-        
+
     @classmethod
     def soap_set_token_valid(cls):
         __addon__.setSetting('_token_valid', str(int(time.time()) + 86400 * 7))
@@ -456,7 +458,7 @@ class KodiConfig(object):
     @classmethod
     def soap_set_token_check(cls):
         __addon__.setSetting('_token_check', str(int(time.time()) + 600))
-    
+
     @classmethod
     def message_till_days(cls):
         mtd = __addon__.getSetting('_message_till_days')
@@ -470,18 +472,18 @@ class KodiConfig(object):
     def kodi_get_auth(cls):
         username = __addon__.getSetting('username')
         password = __addon__.getSetting('password')
-    
+
         while len(username) == 0 or len(password) == 0:
             __addon__.openSettings()
             username = __addon__.getSetting('username')
             password = __addon__.getSetting('password')
-    
+
         return {
             'login': username,
             'password': password
         }
-    
-    
+
+
 class SoapConfig(object):
     def __init__(self):
         self.quality = to_int(__addon__.getSetting('quality')) # 0 all, 1 SD, 2 720p, 3 FullHD
@@ -786,8 +788,16 @@ class SoapEpisode(object):
                 self.label(f, with_soapname),
                 img=self.img,
                 is_folder=False,
-                is_watched=self.is_watched()
+                is_watched=self.is_watched(),
+                context=self.get_context(f)
             ) for f in files
+        ]
+
+    def get_context(self, f):
+        return [
+            (u'Пометить как непросмотренный', u'RunScript(plugin.video.soap4.me, mark_unwatched, {0})'.format(f['eid']))
+            if self.is_watched() else
+            (u'Пометить как просмотренный', u'RunScript(plugin.video.soap4.me, mark_watched, {0})'.format(f['eid']))
         ]
 
 
@@ -889,6 +899,7 @@ class SoapApi(object):
     PLAY_EPISODES_URL = '/play/episode/{eid}/'
     SAVE_POSITION_URL = '/play/episode/{eid}/savets/'
     MARK_WATCHED = '/episodes/watch/{eid}/'
+    MARK_UNWATCHED = '/episodes/unwatch/{eid}/'
 
     def __init__(self):
         self.client = SoapHttpClient()
@@ -1009,6 +1020,13 @@ class SoapApi(object):
         data = self.client.request(self.MARK_WATCHED.format(eid=eid), params)
         return isinstance(data, dict) and data.get('ok', 0) == 1
 
+    def mark_unwatched(self, eid):
+        params = {
+            'eid': eid
+        }
+        data = self.client.request(self.MARK_UNWATCHED.format(eid=eid), params)
+        return isinstance(data, dict) and data.get('ok', 0) == 1
+
     def save_position(self, eid, position):
         params = {
             'eid': eid,
@@ -1078,7 +1096,7 @@ class SoapApi(object):
                         parts.season = str(all_episodes.first_unwatched_season())
                     except StopIteration:
                         pass
-                    
+
             if parts.season is None:
                 if  all_episodes.count_seasons() > 1:
                     rows = all_episodes.list_seasons()
@@ -1096,7 +1114,7 @@ class SoapApi(object):
 
             if not self.get_play(all_episodes, parts.season, parts.epnum, parts.eid):
                  parts.page = 'Episodes'
-                 
+
                  rows = all_episodes.list_episodes(int(parts.season), self.config)
                  if self.config.reverse:
                      rows = rows[::-1]
@@ -1119,7 +1137,7 @@ def kodi_draw_list(parts, rows):
 
 class KodiUrl(object):
     __slots__ = ('page', 'param', 'sid', 'season', 'epnum', 'eid')
-    
+
     def __init__(self, params):
         for key in self.__slots__:
             setattr(self, key, params.get(key))
@@ -1127,26 +1145,26 @@ class KodiUrl(object):
     @classmethod
     def init(cls):
         url_params = sys.argv[2][1:]
-        
+
         parts = url_params.split('&')
         parts = filter(None, parts)
         params = map(lambda x: x.split('=', 1), parts)
         result = dict()
-        
+
         for k, v in params:
             result[urllib.unquote(k)] = urllib.unquote(v)
-        
+
         return KodiUrl(result)
-    
+
     def uri(self, link):
         params = dict([
             (key, link.get(key, getattr(self, key)))
             for key in self.__slots__
             if getattr(self, key) is not None or link.get(key) is not None
         ])
-        
+
         return sys.argv[0] + "?{0}".format(urllib.urlencode(params))
-    
+
     def clear(self):
         for key in self.__slots__:
             setattr(self, key, None)
@@ -1197,7 +1215,7 @@ if sys.argv[1] == 'clearcache':
     clean_cache()
     message_ok('Done')
     exit(0)
-    
+
 if sys.argv[1] == u'watch' or sys.argv[1] == u'unwatch':
     api = SoapApi()
 
@@ -1213,6 +1231,25 @@ if sys.argv[1] == u'watch' or sys.argv[1] == u'unwatch':
         message_ok(u'Выполнено')
     else:
         message_error(u'Ошибка: {0}'.format(msg))
+
+    exit(0)
+
+if sys.argv[1] == u'mark_watched' or sys.argv[1] == u'mark_unwatched':
+    api = SoapApi()
+
+    if not api.is_auth:
+        message_error(u'Ошибка авторизации')
+
+    eid = to_int(sys.argv[2])
+    res = api.mark_watched(eid) if (sys.argv[1] == u'mark_watched') else api.mark_unwatched(eid)
+    api.client.clean_all()
+    xbmc.executebuiltin('Container.Refresh')
+
+    if res:
+        message_ok(u'Выполнено')
+    else:
+        #message_error(u'Ошибка: {0}'.format(msg))
+        message_error(u'Ошибка')
 
     exit(0)
 
