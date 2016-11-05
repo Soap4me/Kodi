@@ -1040,6 +1040,7 @@ class SoapApi(object):
             'time': int(position)
         }
         data = self.client.request(self.SAVE_POSITION_URL.format(eid=eid), params)
+        xbmc.executebuiltin('Container.Refresh')
         return isinstance(data, dict) and data.get('ok', 0) == 1
 
     def get_play(self, all_episodes, season, epnum, eid):
