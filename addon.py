@@ -1088,7 +1088,7 @@ class SoapApi(object):
             data['stream'],
             data['start_from'] or 0,
             li,
-            lambda : self.mark_watched(ep_data['eid']),
+            lambda : self.mark_watched('episode', {'sid': ep_data['sid'], 'season': season, 'episode': epnum}),
             lambda pos: self.save_position(ep_data['eid'], pos)
         )
         sv.play()
