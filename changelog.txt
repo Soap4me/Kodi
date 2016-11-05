@@ -1,3 +1,6 @@
+v1.0.13
+- Menu watch/unwatch everywhere in plugin (with eschava)
+
 v1.0.12
 - Add setting for auto open first unwatched season (by eschava)
 
