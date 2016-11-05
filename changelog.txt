@@ -1,3 +1,6 @@
+v1.0.14
+- Fix bug
+
 v1.0.13
 - Menu watch/unwatch everywhere in plugin (with eschava)
 
