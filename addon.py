@@ -1023,6 +1023,7 @@ class SoapApi(object):
             'eid': eid
         }
         data = self.client.request(self.MARK_WATCHED.format(eid=eid), params)
+        xbmc.executebuiltin('Container.Refresh')
         return isinstance(data, dict) and data.get('ok', 0) == 1
 
     def mark_unwatched(self, eid):
@@ -1030,6 +1031,7 @@ class SoapApi(object):
             'eid': eid
         }
         data = self.client.request(self.MARK_UNWATCHED.format(eid=eid), params)
+        xbmc.executebuiltin('Container.Refresh')
         return isinstance(data, dict) and data.get('ok', 0) == 1
 
     def save_position(self, eid, position):
@@ -1067,7 +1069,6 @@ class SoapApi(object):
             return False, u'Bad response'
 
         if data.get('ok', 0) == 1:
-            xbmc.executebuiltin('Container.Refresh')
             return True, None
 
         return False, data.get('msg')
