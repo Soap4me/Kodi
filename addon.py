@@ -705,11 +705,20 @@ class SoapSerial(object):
         self.sid = sid
         self.data = data
 
+    def is_watched(self):
+        return self.data.get('watching', 0) == 1 and self.data.get('unwatched', -1) == 0
+
     def get_context(self):
+        param = 'A{sid}'.format(sid=self.sid)
+                
         return [
             (u'Добавить в мои сериалы', u'RunScript(plugin.video.soap4.me, watch, {0})'.format(self.sid))
             if self.data.get('watching', 0) == 0 else
             (u'Убрать из моих сериалов', u'RunScript(plugin.video.soap4.me, unwatch, {0})'.format(self.sid))
+        ] + [
+            (u'Пометить как непросмотренный', u'RunScript(plugin.video.soap4.me, mark_unwatched, {0})'.format(param))
+            if self.is_watched() else
+            (u'Пометить как просмотренный', u'RunScript(plugin.video.soap4.me, mark_watched, {0})'.format(param))
         ]
 
     def menu(self):
@@ -724,8 +733,7 @@ class SoapSerial(object):
             'Rating': self.data.get('imdb_rating'),
             'Year': self.data.get('year'),
             'Country': self.data.get('country'),
-            'ChannelName': self.data.get('network'),
-            'PlayCount': 1 if (self.data.get('unwatched', 0) == 0 and self.data.get('watching', 0) == 1) else 0,  # PlayCount=1 only for watching shows
+            'ChannelName': self.data.get('network')
         }
 
         if self.data.get('updated'):
@@ -741,6 +749,7 @@ class SoapSerial(object):
             self.data.get('description'),
             img=self.data['covers']['big'],
             is_folder=True,
+            is_watched=self.is_watched(),   # PlayCount=1 only for watching shows
             meta=meta,
             context=self.get_context()
         )
@@ -778,6 +787,10 @@ class SoapEpisode(object):
             if int(f['eid']) == eid:
                 return f['hash']
 
+    def first_eid(self):
+        for f in self.data['files']:
+            return f['eid']
+
     def menu(self, config, with_soapname=False):
         files = config.filter_files(self.data['files'])
 
@@ -799,10 +812,16 @@ class SoapEpisode(object):
         ]
 
     def get_context(self, f):
+        param = "E{sid}|{season}|{episode}".format(
+            sid=self.sid,
+            season=self.season,
+            episode=self.epnum
+        )
+        
         return [
-            (u'Пометить как непросмотренный', u'RunScript(plugin.video.soap4.me, mark_unwatched, {0})'.format(f['eid']))
+            (u'Пометить как непросмотренный', u'RunScript(plugin.video.soap4.me, mark_unwatched, {0})'.format(param))
             if self.is_watched() else
-            (u'Пометить как просмотренный', u'RunScript(plugin.video.soap4.me, mark_watched, {0})'.format(f['eid']))
+            (u'Пометить как просмотренный', u'RunScript(plugin.video.soap4.me, mark_watched, {0})'.format(param))
         ]
 
 
@@ -846,11 +865,24 @@ class SoapEpisodes(object):
                 ),
                 img=self.covers.get(season),
                 is_folder=True,
-                is_watched=all(ep.is_watched() for ep in self.episodes[season].values())
+                is_watched=all(ep.is_watched() for ep in self.episodes[season].values()),
+                context=self.get_context(season)
             )
             for season in self.seasons
         ]
-
+    
+    def get_context(self, season):
+        param = 'S{sid}|{season}'.format(
+            sid=self.sid,
+            season=season
+        )
+        is_watched=all(ep.is_watched() for ep in self.episodes[season].values())
+        
+        return [
+            (u'Пометить как непросмотренный', u'RunScript(plugin.video.soap4.me, mark_unwatched, {0})'.format(param))
+            if is_watched else
+            (u'Пометить как просмотренный', u'RunScript(plugin.video.soap4.me, mark_watched, {0})'.format(param))
+        ]
 
     def list_episodes(self, season, config):
         if season not in self.episodes:
@@ -896,15 +928,24 @@ class SoapApi(object):
         'alive_for_me': '/soap/top/alive/?exclude=my'
     }
 
-    WATCHING_URL = {
-        'watch': '/soap/watch/{sid}/',
-        'unwatch': '/soap/unwatch/{sid}/'
-    }
-
     PLAY_EPISODES_URL = '/play/episode/{eid}/'
     SAVE_POSITION_URL = '/play/episode/{eid}/savets/'
-    MARK_WATCHED = '/episodes/watch/{eid}/'
-    MARK_UNWATCHED = '/episodes/unwatch/{eid}/'
+
+    WATCHING_URL = {
+        'serial': {
+            'watch': '/episodes/watch/full/{sid}/',
+            'unwatch': '/episodes/unwatch/full/{sid}/'
+        },
+        'season': {
+            'watch': '/episodes/watch/full/{sid}/{season}/',
+            'unwatch': '/episodes/unwatch/full/{sid}/{season}/'
+        },
+        'episode': {
+            'watch': '/episodes/watch/{sid}/{season}/{episode}/',
+            'unwatch': '/episodes/unwatch/{sid}/{season}/{episode}/'
+        }
+        
+    }
 
     def __init__(self):
         self.client = SoapHttpClient()
@@ -1018,19 +1059,13 @@ class SoapApi(object):
 
         return result
 
-    def mark_watched(self, eid):
-        params = {
-            'eid': eid
-        }
-        data = self.client.request(self.MARK_WATCHED.format(eid=eid), params)
+    def mark_watched(self, type, params):
+        data = self.client.request(self.WATCHING_URL[type]['watch'].format(**params), params)
         xbmc.executebuiltin('Container.Refresh')
         return isinstance(data, dict) and data.get('ok', 0) == 1
 
-    def mark_unwatched(self, eid):
-        params = {
-            'eid': eid
-        }
-        data = self.client.request(self.MARK_UNWATCHED.format(eid=eid), params)
+    def mark_unwatched(self, type, params):
+        data = self.client.request(self.WATCHING_URL[type]['unwatch'].format(**params), params)
         xbmc.executebuiltin('Container.Refresh')
         return isinstance(data, dict) and data.get('ok', 0) == 1
 
@@ -1248,8 +1283,27 @@ if sys.argv[1] == u'mark_watched' or sys.argv[1] == u'mark_unwatched':
     if not api.is_auth:
         message_error(u'Ошибка авторизации')
 
-    eid = to_int(sys.argv[2])
-    res = api.mark_watched(eid) if (sys.argv[1] == u'mark_watched') else api.mark_unwatched(eid)
+    param = sys.argv[2]
+    
+    def parse(param):
+        return dict(zip(('sid', 'season', 'episode'), map(to_int, param.split('|'))))
+
+    type = 'None'
+    params = parse(param[1:])
+    
+    
+    if param.startswith('A'):
+        type = 'serial'
+    elif param.startswith('S'):
+        type = 'season'
+    else:
+        type = 'episode'
+
+
+    
+    mark_fun = api.mark_watched if sys.argv[1] == u'mark_watched' else api.mark_unwatched
+    res = mark_fun(type, params)
+    
     api.client.clean_all()
     xbmc.executebuiltin('Container.Refresh')
 
