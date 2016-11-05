@@ -1067,6 +1067,7 @@ class SoapApi(object):
             return False, u'Bad response'
 
         if data.get('ok', 0) == 1:
+            xbmc.executebuiltin('Container.Refresh')
             return True, None
 
         return False, data.get('msg')
