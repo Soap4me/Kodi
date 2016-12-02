@@ -1,3 +1,6 @@
+v1.0.15
+- Fix bug with add/remove soap from my serials
+
 v1.0.14
 - Fix bug
 
