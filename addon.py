@@ -931,6 +931,12 @@ class SoapApi(object):
     PLAY_EPISODES_URL = '/play/episode/{eid}/'
     SAVE_POSITION_URL = '/play/episode/{eid}/savets/'
 
+    MARKER_URL = {
+        'watch': '/soap/watch/{sid}/',
+        'unwatch': '/soap/unwatch/{sid}/',
+    }
+    
+
     WATCHING_URL = {
         'serial': {
             'watch': '/episodes/watch/full/{sid}/',
@@ -1095,11 +1101,11 @@ class SoapApi(object):
 
         return True
 
-    def set_watching(self, sid, event):
+    def set_marker(self, sid, event):
         params = {
             'sid': sid
         }
-        data = self.client.request(self.WATCHING_URL[event].format(sid=sid), params)
+        data = self.client.request(self.MARKER_URL[event].format(sid=sid), params)
 
         if not isinstance(data, dict):
             return False, u'Bad response'
@@ -1266,7 +1272,7 @@ if sys.argv[1] == u'watch' or sys.argv[1] == u'unwatch':
         message_error(u'Ошибка авторизации')
 
     sid =  to_int(sys.argv[2])
-    res, msg = api.set_watching(sid, sys.argv[1])
+    res, msg = api.set_marker(sid, sys.argv[1])
     api.client.clean_all()
     xbmc.executebuiltin('Container.Refresh')
 
