@@ -14,10 +14,4 @@
         <platform>all</platform>
         <website>http://soap4.me</website>
     </extension>
-    <extension point="xbmc.addon.repository"
-                name="Soap4.me">
-      <info compressed="true">https://github.com/ufian/soap4me-repo/raw/master/addons.xml</info>
-      <checksum>https://github.com/ufian/soap4me-repo/raw/master/addons.xml.md5</checksum>
-      <datadir zip="true">https://github.com/ufian/soap4me-repo/raw/master</datadir>
-    </extension>
 </addon>
