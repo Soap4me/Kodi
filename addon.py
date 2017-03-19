@@ -488,6 +488,10 @@ class KodiConfig(object):
             'password': password
         }
 
+    @classmethod
+    def use_skin_settings(cls):
+        return __addon__.getSetting('use_skin_settings') == 'true'
+
 
 class SoapConfig(object):
     def __init__(self):
@@ -618,10 +622,16 @@ class SoapAuth(object):
 
 
 def _color(color, text):
-    return u"[COLOR={0}]{1}[/COLOR]".format(color, text)
+    if not KodiConfig.use_skin_settings():
+        return u"[COLOR={0}]{1}[/COLOR]".format(color, text)
+    else:
+        return text
 
 def _light(text):
-    return u"[LIGHT]{0}[/LIGHT]".format(text)
+    if not KodiConfig.use_skin_settings():
+        return u"[LIGHT]{0}[/LIGHT]".format(text)
+    else:
+        return text
 
 if xbmc.__version__ < '2.24.0':
     _light = lambda text: text
