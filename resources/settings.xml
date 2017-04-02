@@ -24,6 +24,5 @@
         <setting label="Прочее" type="lsep" />
         <setting id="list_unwatched_season" type="bool" label="Открывать непросмотренный сезон" default="false" />
         <setting label="Стереть кеши" type="action" action="RunScript(plugin.video.soap4.me, clearcache)"/>
-        <setting id="use_skin_settings" label="Использовать настройки темы" type="bool" default="false"/>
     </category>
 </settings>
