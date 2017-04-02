@@ -623,7 +623,7 @@ def _color(color, text):
 def _light(text):
     return u"[LIGHT]{0}[/LIGHT]".format(text)
 
-if xbmc.__version__ < '2.24.0':
+if (xbmc.__version__ < '2.24.0') or (xbmc.getSkinDir() != 'skin.estuary'):
     _light = lambda text: text
 
 class MenuRow(object):
