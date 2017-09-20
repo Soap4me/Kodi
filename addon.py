@@ -194,8 +194,11 @@ class SoapVideo(object):
 
         if pos is False or pos is "":
             pos = 0
+        try:
+            pos = max(float(pos), float(self.start_from))
+        except ValueError:
+            pos = 0
 
-        pos = max(float(pos), float(self.start_from))
         if pos < 10:
             return 0
 
@@ -491,7 +494,7 @@ class KodiConfig(object):
 
 class SoapConfig(object):
     def __init__(self):
-        self.quality = to_int(__addon__.getSetting('quality')) # 0 all, 1 SD, 2 720p, 3 FullHD
+        self.quality = to_int(__addon__.getSetting('quality')) # 0 all, 1 SD, 2 720p, 3 FullHD, 4 4K
         self.translate = to_int(__addon__.getSetting('translate')) # 0 all, 1 subs, 2 voice
         self.audio =  to_int(__addon__.getSetting('audio')) == 1 # 0 all, 1 rus 2 orig
         self.subtitle =  to_int(__addon__.getSetting('subtitle')) == 1 # 0 all, 1 rus 2 orig
@@ -547,6 +550,8 @@ class SoapConfig(object):
             return '720p'
         elif quality == 3:
             return 'FullHD'
+        elif quality == 4:
+            return '4K'
 
     @classmethod
     def name_translate(cls, translate):

@@ -7,7 +7,7 @@
 <!--    </category>
     <category label="Список видео">-->
         <setting label="Список видео" type="lsep" />
-        <setting id="quality" type="enum" label="Максимальное качество видео" values="Любой|SD|720p|FullHD"/>
+        <setting id="quality" type="enum" label="Максимальное качество видео" values="Любой|SD|720p|FullHD|4K"/>
         <setting id="translate" type="enum" label="Перевод по возможности" values="Показывать все|Субтитры|Голос"/>
         <setting id="sorting" type="enum" label="Сортировка" values="Сначала новые|Сначала старые" />
 
