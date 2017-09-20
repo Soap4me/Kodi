@@ -1,3 +1,7 @@
+v1.0.17
+- Add 4K support
+- Fix bug
+
 v1.0.16
 - Doesn't use light for not default skin
 
