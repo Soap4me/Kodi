@@ -308,7 +308,8 @@ class SoapCache(object):
     def rm(self, cache_id):
         cache_id = filter(lambda c: c not in ",./", cache_id)
         filename = os.path.join(self.path, str(cache_id))
-        os.remove(filename)
+        if os.path.exists(filename):
+            os.remove(filename)
 
     def rmall(self):
         shutil.rmtree(self.path)
@@ -396,8 +397,9 @@ class SoapHttpClient(SoapCookies):
         post_data = self._post_data(params)
         if params is not None:
             req.add_header('Content-Type', 'application/x-www-form-urlencoded')
-
+        
         response = urllib2.urlopen(req, post_data)
+
 
         self._cookies_save()
 
@@ -957,6 +959,9 @@ class SoapApi(object):
         }
         
     }
+    
+    class EMPTY_RESULT(object):
+        pass
 
     def __init__(self):
         self.client = SoapHttpClient()
@@ -1000,15 +1005,20 @@ class SoapApi(object):
             url = self.LISTS_URL[sid]
         else:
             url = self.EPISODES_URL.format(sid)
-
+            
         def _request():
-            data = self.client.request(url, use_cache=use_cache)
+            try:
+                data = self.client.request(url, use_cache=use_cache)
+            except urllib2.HTTPError as err:
+                if err.code == 404:
+                    return self.EMPTY_RESULT
+                raise
 
             if isinstance(data, dict) \
                     and data.get('ok', 'None') == 0 \
                     and data.get('error', '') != '':
                 self.client.clean(url)
-                return False
+                return []
 
             return data
 
@@ -1019,6 +1029,9 @@ class SoapApi(object):
             if not data:
                 self.client.clean(url)
                 raise Exception('Error with request')
+        
+        if data is self.EMPTY_RESULT:
+            return []
 
         return data
 
