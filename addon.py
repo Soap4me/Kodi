@@ -989,7 +989,15 @@ class SoapApi(object):
             MenuRow({'page': 'MyLast'}, _color('FFFFFFAA', u"Последние 20 эпизодов"), is_folder=True,
                     meta={
                         'Date': (dt.datetime.now() + dt.timedelta(days=365)).strftime('%d-%m-%Y')
-                    })
+                    }),
+        ]
+
+    def my_new_menu(self):
+        return [
+            MenuRow({'page': 'MyNew'}, _color('FFEEEEAA', u"C непросмотренными эпизодами"), is_folder=True,
+                meta={
+                    'Date': (dt.datetime.now() + dt.timedelta(days=365)).strftime('%d-%m-%Y')
+                })
         ]
 
     def all_menu(self):
@@ -1035,11 +1043,16 @@ class SoapApi(object):
 
         return data
 
-    def get_serials(self, type):
-        return [
+    def get_serials(self, type, unwatched=False):
+        result = [
             SoapSerial(int(row['sid']), row).menu()
             for row in self.get_list(type)
         ]
+        
+        if unwatched:
+            result = filter(lambda s: not s.is_watched, result)
+        
+        return result
 
     def get_all_episodes(self, sid):
         return SoapEpisodes(sid, self.get_list(sid))
@@ -1138,7 +1151,11 @@ class SoapApi(object):
             return self.main()
         elif parts.page == 'My':
             return self.my_menu() + \
+                   self.my_new_menu() + \
                    self.get_serials('my')
+        elif parts.page == 'MyNew':
+            return self.my_menu() + \
+                   self.get_serials('my', unwatched=True)
         elif parts.page == 'MyLast':
             return self.get_last_episodes('my')
         elif parts.page == 'All':
