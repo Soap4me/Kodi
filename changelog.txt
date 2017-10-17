@@ -1,3 +1,7 @@
+v1.0.18
+- Add menu for unwatched serials
+- Fix bug with empty list of started episodes
+
 v1.0.17
 - Add 4K support
 - Fix bug
