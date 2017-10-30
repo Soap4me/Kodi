@@ -502,6 +502,7 @@ class SoapConfig(object):
         self.subtitle =  to_int(__addon__.getSetting('subtitle')) == 1 # 0 all, 1 rus 2 orig
         self.reverse = to_int(__addon__.getSetting('sorting')) == 1 # 0 down, 1 up
         self.list_unwatched_season = __addon__.getSetting('list_unwatched_season') == 'true'
+        self.hide_watched_finished = __addon__.getSetting('hide_watched_finished') == 'true'
 
     def _choice_quality(self, files):
         qualities = set([to_int(f['quality']) for f in files])
@@ -634,16 +635,17 @@ if (xbmc.__version__ < '2.24.0') or (xbmc.getSkinDir() != 'skin.estuary'):
     _light = lambda text: text
 
 class MenuRow(object):
-    __slots__ = ('link', 'title', 'description', 'img', 'is_folder', 'is_watched', 'meta', 'context')
+    __slots__ = ('link', 'title', 'description', 'img', 'is_folder', 'is_watched', 'is_finished', 'meta', 'context')
 
     def __init__(self, link, title, description='', img=None,
-                 is_folder=False, is_watched=False, meta=None, context=None):
+                 is_folder=False, is_watched=False, is_finished=False, meta=None, context=None):
         self.link = link
         self.title = title
         self.description = description
         self.img = img
         self.is_folder = is_folder
         self.is_watched = is_watched
+        self.is_finished = is_finished
         self.meta = meta
         self.context=context
 
@@ -715,6 +717,9 @@ class SoapSerial(object):
     def is_watched(self):
         return self.data.get('watching', 0) == 1 and self.data.get('unwatched', -1) == 0
 
+    def is_finished(self):
+        return self.data.get('status', u'0') == u'1'
+
     def get_context(self):
         param = 'A{sid}'.format(sid=self.sid)
                 
@@ -757,6 +762,7 @@ class SoapSerial(object):
             img=self.data['covers']['big'],
             is_folder=True,
             is_watched=self.is_watched(),   # PlayCount=1 only for watching shows
+            is_finished=self.is_finished(),
             meta=meta,
             context=self.get_context()
         )
@@ -959,6 +965,11 @@ class SoapApi(object):
         }
         
     }
+
+    DEFAULT_FILTERS = {
+        'unwatched': False,
+        'watched_finished': True
+    }
     
     class EMPTY_RESULT(object):
         pass
@@ -1043,15 +1054,20 @@ class SoapApi(object):
 
         return data
 
-    def get_serials(self, type, unwatched=False):
+    def get_serials(self, type, filters={}):
         result = [
             SoapSerial(int(row['sid']), row).menu()
             for row in self.get_list(type)
         ]
-        
-        if unwatched:
+
+        merged_filters = dict(self.DEFAULT_FILTERS.items(), filters.items())
+
+        if merged_filters['unwatched']:
             result = filter(lambda s: not s.is_watched, result)
-        
+
+        if not merged_filters['watched_finished']:
+            result = filter(lambda s: not (s.is_watched and s.is_finished), result)
+
         return result
 
     def get_all_episodes(self, sid):
@@ -1150,12 +1166,14 @@ class SoapApi(object):
         if parts.page == 'Main' or parts.page is None:
             return self.main()
         elif parts.page == 'My':
+            filters = { 'watched_finished': not self.config.hide_watched_finished }
             return self.my_menu() + \
                    self.my_new_menu() + \
-                   self.get_serials('my')
+                   self.get_serials('my', filters)
         elif parts.page == 'MyNew':
+            filters = { 'unwatched': True }
             return self.my_menu() + \
-                   self.get_serials('my', unwatched=True)
+                   self.get_serials('my', filters)
         elif parts.page == 'MyLast':
             return self.get_last_episodes('my')
         elif parts.page == 'All':
