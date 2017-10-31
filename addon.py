@@ -966,11 +966,6 @@ class SoapApi(object):
         
     }
 
-    DEFAULT_FILTERS = {
-        'unwatched': False,
-        'watched_finished': True
-    }
-    
     class EMPTY_RESULT(object):
         pass
 
@@ -1054,18 +1049,19 @@ class SoapApi(object):
 
         return data
 
-    def get_serials(self, type, filters={}):
+    def get_serials(self, type, filters=None):
+        if filters is None:
+            filters = None
+            
         result = [
             SoapSerial(int(row['sid']), row).menu()
             for row in self.get_list(type)
         ]
 
-        merged_filters = dict(self.DEFAULT_FILTERS.items(), filters.items())
-
-        if merged_filters['unwatched']:
+        if filters.get('unwatched'):
             result = filter(lambda s: not s.is_watched, result)
 
-        if not merged_filters['watched_finished']:
+        if filters.get('hide_watched_finished'):
             result = filter(lambda s: not (s.is_watched and s.is_finished), result)
 
         return result
@@ -1166,14 +1162,12 @@ class SoapApi(object):
         if parts.page == 'Main' or parts.page is None:
             return self.main()
         elif parts.page == 'My':
-            filters = { 'watched_finished': not self.config.hide_watched_finished }
             return self.my_menu() + \
                    self.my_new_menu() + \
-                   self.get_serials('my', filters)
+                   self.get_serials('my', {'hide_watched_finished': self.config.hide_watched_finished})
         elif parts.page == 'MyNew':
-            filters = { 'unwatched': True }
             return self.my_menu() + \
-                   self.get_serials('my', filters)
+                   self.get_serials('my', {'unwatched': True})
         elif parts.page == 'MyLast':
             return self.get_last_episodes('my')
         elif parts.page == 'All':
