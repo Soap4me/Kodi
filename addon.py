@@ -1051,7 +1051,7 @@ class SoapApi(object):
 
     def get_serials(self, type, filters=None):
         if filters is None:
-            filters = None
+            filters = {}
             
         result = [
             SoapSerial(int(row['sid']), row).menu()
