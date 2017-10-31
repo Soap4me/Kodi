@@ -9,8 +9,8 @@
     <extension point="xbmc.addon.metadata">
         <summary lang="en">Soap4.me is the best for apple devices</summary>
         <summary lang="ru">Soap4.me лучший для apple девайсов</summary>
-        <description lang="en">Thanks @gimlis, @speedpoke and @eschava</description>
-        <description lang="ru">спасибо @gimlis, @speedpoke и @eschava за него :)</description>
+        <description lang="en">Thanks @gimlis, @speedpoke, @eschava and @darkwebdev</description>
+        <description lang="ru">спасибо @gimlis, @speedpoke, @eschava и @darkwebdev за него :)</description>
         <platform>all</platform>
         <website>http://soap4.me</website>
   </extension>
