@@ -1,3 +1,7 @@
+v1.0.19
+- Add i18n support, en/ru translations
+- Add setting to hide watched finished shows
+
 v1.0.18
 - Add menu for unwatched serials
 - Fix bug with empty list of started episodes

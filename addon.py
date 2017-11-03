@@ -14,7 +14,7 @@ try:
 except:
     pass
 
-__version__ = '1.0.18'
+__version__ = '1.0.19'
 __settings__ = xbmcaddon.Addon(id='plugin.video.soap4.me')
 
 DEBUG = False
