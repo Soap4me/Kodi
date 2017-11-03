@@ -1,29 +1,29 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <settings>
-    <category label="Soap4.me">
-        <setting label="Авторизация" type="lsep" />
-        <setting id="username" type="text" label="Ваш логин" default="" />
-        <setting id="password" type="text" label="Ваш пароль" option="hidden" default="" />
+    <category label="30000">
+        <setting label="30010" type="lsep" />
+        <setting id="username" type="text" label="30011" default="" />
+        <setting id="password" type="text" label="30012" option="hidden" default="" />
 <!--    </category>
     <category label="Список видео">-->
-        <setting label="Список видео" type="lsep" />
-        <setting id="quality" type="enum" label="Максимальное качество видео" values="Любой|SD|720p|FullHD|4K"/>
-        <setting id="translate" type="enum" label="Перевод по возможности" values="Показывать все|Субтитры|Голос"/>
-        <setting id="sorting" type="enum" label="Сортировка" values="Сначала новые|Сначала старые" />
+        <setting label="30020" type="lsep" />
+        <setting id="quality" type="enum" label="30021" lvalues="30022|30023|30024|30025|30026" />
+        <setting id="translate" type="enum" label="30031" lvalues="30032|30033|30034" />
+        <setting id="sorting" type="enum" label="30041" lvalues="30042|30043" />
 
         <!--        <setting label="Группировка" type="lsep" />
         <setting id="group_quality" type="bool" label="Группировать по качеству" default="false" />
         <setting id="group_translate" type="bool" label="Группировать по переводу" default="false" />
         <setting id="group_season" type="bool" label="Группировать по сезонам" default="true" /> -->
     </category>
-    <category label="Параметры">
-        <setting label="Параметры воспроизведения" type="lsep" />
-        <setting id="audio" type="enum" label="Предпочитаемая аудиодорожка" values="По-умолчанию|Перевод|Оригинал"/>
-        <setting id="subtitle" type="enum" label="Предпочитаемые субтитры" values="По-умолчанию|Перевод|Оригинал|Выключить"/>
+    <category label="30100">
+        <setting label="30110" type="lsep" />
+        <setting id="audio" type="enum" label="30111" lvalues="30112|30113|30114" />
+        <setting id="subtitle" type="enum" label="30115" lvalues="30116|30117|30118|30119" />
 
-        <setting label="Прочее" type="lsep" />
-        <setting id="list_unwatched_season" type="bool" label="Открывать непросмотренный сезон" default="false" />
-        <setting id="hide_watched_finished" type="bool" label="Скрывать просмотренные законченные сериалы" default="false"/>
-        <setting label="Стереть кеши" type="action" action="RunScript(plugin.video.soap4.me, clearcache)"/>
+        <setting label="30130" type="lsep" />
+        <setting id="list_unwatched_season" type="bool" label="30131" default="false" />
+        <setting id="hide_watched_finished" type="bool" label="30132" default="false"/>
+        <setting label="30133" type="action" action="RunScript(plugin.video.soap4.me, clearcache)" />
     </category>
 </settings>

@@ -6,6 +6,7 @@ import xbmc, xbmcgui, xbmcplugin, xbmcaddon
 import urllib, os, sys
 import datetime as dt
 from collections import namedtuple
+import resources.lib.localization as l
 
 try:
     import ssl
@@ -203,7 +204,7 @@ class SoapVideo(object):
             return 0
 
         dialog = xbmcgui.Dialog()
-        ret = dialog.select(u'Воспроизвести', [u'С {0}'.format(get_time(pos)), u'Сначала'])
+        ret = dialog.select(l.play, [l.from_time.format(get_time(pos)), l.from_start])
 
         if ret < 0:  # cancel
             pos = -1
@@ -476,7 +477,7 @@ class KodiConfig(object):
             __addon__.setSetting('_message_till_days', str(int(time.time()) + 43200))
             till = to_int(__addon__.getSetting('_token_till'))
             if till != 0:
-                message_ok("Осталось {0} дней".format(int(till - time.time()) / 86400))
+                message_ok(l.days_left.format(int(till - time.time()) / 86400))
 
     @classmethod
     def kodi_get_auth(cls):
@@ -559,13 +560,13 @@ class SoapConfig(object):
     @classmethod
     def name_translate(cls, translate):
         if translate == 1:
-            return 'Original'
+            return l.original
         elif translate == 2:
-            return 'OrigSubs'
+            return l.original_sub
         elif translate == 3:
-            return 'RusSubs'
+            return l.russian_sub
         elif translate == 4:
-            return u'Перевод'
+            return l.translated
 
 
 class SoapAuth(object):
@@ -581,7 +582,7 @@ class SoapAuth(object):
         data = self.client.request(self.AUTH_URL, KodiConfig.kodi_get_auth())
 
         if not isinstance(data, dict) or data.get('ok') != 1:
-            message_error("Login or password are incorrect")
+            message_error(l.error_cred)
             return False
 
         KodiConfig.soap_set_auth(data)
@@ -618,7 +619,7 @@ class SoapAuth(object):
 
         params = KodiConfig.soap_get_auth()
         if not params['token']:
-            message_error("Auth error")
+            message_error(l.error_auth)
             return False
 
         self.client.set_token(params['token'])
@@ -687,7 +688,7 @@ class MenuRow(object):
     @staticmethod
     def count_watching(count):
         if count > 0:
-            return u"  " + _color("AAAAAAAA", _light(u"({0} просмотров)".format(count)))
+            return u"  " + _color("AAAAAAAA", _light(l.views.format(count)))
         else:
             return ""
 
@@ -724,13 +725,13 @@ class SoapSerial(object):
         param = 'A{sid}'.format(sid=self.sid)
                 
         return [
-            (u'Добавить в мои сериалы', u'RunScript(plugin.video.soap4.me, watch, {0})'.format(self.sid))
+            (l.add_to_my_shows, u'RunScript(plugin.video.soap4.me, watch, {0})'.format(self.sid))
             if self.data.get('watching', 0) == 0 else
-            (u'Убрать из моих сериалов', u'RunScript(plugin.video.soap4.me, unwatch, {0})'.format(self.sid))
+            (l.remove_from_my_shows, u'RunScript(plugin.video.soap4.me, unwatch, {0})'.format(self.sid))
         ] + [
-            (u'Пометить как непросмотренный', u'RunScript(plugin.video.soap4.me, mark_unwatched, {0})'.format(param))
+            (l.mark_as_unwatched, u'RunScript(plugin.video.soap4.me, mark_unwatched, {0})'.format(param))
             if self.is_watched() else
-            (u'Пометить как просмотренный', u'RunScript(plugin.video.soap4.me, mark_watched, {0})'.format(param))
+            (l.mark_as_watched, u'RunScript(plugin.video.soap4.me, mark_watched, {0})'.format(param))
         ]
 
     def menu(self):
@@ -832,9 +833,9 @@ class SoapEpisode(object):
         )
         
         return [
-            (u'Пометить как непросмотренный', u'RunScript(plugin.video.soap4.me, mark_unwatched, {0})'.format(param))
+            (l.mark_as_unwatched, u'RunScript(plugin.video.soap4.me, mark_unwatched, {0})'.format(param))
             if self.is_watched() else
-            (u'Пометить как просмотренный', u'RunScript(plugin.video.soap4.me, mark_watched, {0})'.format(param))
+            (l.mark_as_watched, u'RunScript(plugin.video.soap4.me, mark_watched, {0})'.format(param))
         ]
 
 
@@ -892,9 +893,9 @@ class SoapEpisodes(object):
         is_watched=all(ep.is_watched() for ep in self.episodes[season].values())
         
         return [
-            (u'Пометить как непросмотренный', u'RunScript(plugin.video.soap4.me, mark_unwatched, {0})'.format(param))
+            (l.mark_as_unwatched, u'RunScript(plugin.video.soap4.me, mark_unwatched, {0})'.format(param))
             if is_watched else
-            (u'Пометить как просмотренный', u'RunScript(plugin.video.soap4.me, mark_watched, {0})'.format(param))
+            (l.mark_as_watched, u'RunScript(plugin.video.soap4.me, mark_watched, {0})'.format(param))
         ]
 
     def list_episodes(self, season, config):
@@ -984,15 +985,15 @@ class SoapApi(object):
         KodiConfig.message_till_days()
 
         return [
-            MenuRow({'page': 'My', 'param': 'my'}, u"Мои сериалы", is_folder=True),
-            MenuRow({'page': 'All', 'param': 'my'}, u"Все сериалы", is_folder=True),
-            MenuRow({'page': 'Continue', 'param': 'my'}, u"Досмотреть начатое", is_folder=True),
-            MenuRow({'page': 'AliveForMe', 'param': 'my'}, u"Что еще посмотреть?", is_folder=True),
+            MenuRow({'page': 'My', 'param': 'my'}, l.my_shows, is_folder=True),
+            MenuRow({'page': 'All', 'param': 'my'}, l.all_shows, is_folder=True),
+            MenuRow({'page': 'Continue', 'param': 'my'}, l.unfinished, is_folder=True),
+            MenuRow({'page': 'AliveForMe', 'param': 'my'}, l.recommended, is_folder=True),
         ]
 
     def my_menu(self):
         return [
-            MenuRow({'page': 'MyLast'}, _color('FFFFFFAA', u"Последние 20 эпизодов"), is_folder=True,
+            MenuRow({'page': 'MyLast'}, _color('FFFFFFAA', l.last_20), is_folder=True,
                     meta={
                         'Date': (dt.datetime.now() + dt.timedelta(days=365)).strftime('%d-%m-%Y')
                     }),
@@ -1000,15 +1001,15 @@ class SoapApi(object):
 
     def my_new_menu(self):
         return [
-            MenuRow({'page': 'MyNew'}, _color('FFEEEEAA', u"C непросмотренными эпизодами"), is_folder=True,
-                meta={
+            MenuRow({'page': 'MyNew'}, _color('FFEEEEAA', l.with_unwatched), is_folder=True,
+                    meta={
                     'Date': (dt.datetime.now() + dt.timedelta(days=365)).strftime('%d-%m-%Y')
                 })
         ]
 
     def all_menu(self):
         return [
-            MenuRow({'page': 'AllLast'}, _color('FFFFFFAA', u"Последние 20 эпизодов"), is_folder=True,
+            MenuRow({'page': 'AllLast'}, _color('FFFFFFAA', l.last_20), is_folder=True,
                     meta={
                         'Date': (dt.datetime.now() + dt.timedelta(days=365)).strftime('%d-%m-%Y')
                     })
@@ -1297,7 +1298,7 @@ def addon_main():
     api = SoapApi()
 
     if not api.is_auth:
-        rows = [("error", "Ошибка авторизации", "", None, True, False)]
+        rows = [("error", l.error_auth, "", None, True, False)]
         kodi_draw_list([], rows)
         return
 
@@ -1309,14 +1310,14 @@ def addon_main():
 
 if sys.argv[1] == 'clearcache':
     clean_cache()
-    message_ok('Done')
+    message_ok(l.done)
     exit(0)
 
 if sys.argv[1] == u'watch' or sys.argv[1] == u'unwatch':
     api = SoapApi()
 
     if not api.is_auth:
-        message_error(u'Ошибка авторизации')
+        message_error(l.error_auth)
 
     sid =  to_int(sys.argv[2])
     res, msg = api.set_marker(sid, sys.argv[1])
@@ -1324,9 +1325,9 @@ if sys.argv[1] == u'watch' or sys.argv[1] == u'unwatch':
     xbmc.executebuiltin('Container.Refresh')
 
     if res:
-        message_ok(u'Выполнено')
+        message_ok(l.done)
     else:
-        message_error(u'Ошибка: {0}'.format(msg))
+        message_error(l.error_msg.format(msg))
 
     exit(0)
 
@@ -1334,7 +1335,7 @@ if sys.argv[1] == u'mark_watched' or sys.argv[1] == u'mark_unwatched':
     api = SoapApi()
 
     if not api.is_auth:
-        message_error(u'Ошибка авторизации')
+        message_error(l.error_auth)
 
     param = sys.argv[2]
     
@@ -1361,10 +1362,10 @@ if sys.argv[1] == u'mark_watched' or sys.argv[1] == u'mark_unwatched':
     xbmc.executebuiltin('Container.Refresh')
 
     if res:
-        message_ok(u'Выполнено')
+        message_ok(l.done)
     else:
-        #message_error(u'Ошибка: {0}'.format(msg))
-        message_error(u'Ошибка')
+        #message_error(l.error_msg.format(msg))
+        message_error(l.error)
 
     exit(0)
 
