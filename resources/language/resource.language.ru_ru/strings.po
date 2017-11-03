@@ -1,0 +1,245 @@
+# Kodi Media Center language file
+# Addon Name: Soap4.me
+# Addon id: plugin.video.soap4.me
+# Addon Provider: info@soap4.me
+msgid ""
+msgstr ""
+"Project-Id-Version: Soap4me Addon\n"
+"Report-Msgid-Bugs-To: info@soap4.me\n"
+"POT-Creation-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: \n"
+"Language-Team: Russian\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Language: ru\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+
+msgctxt "#30000"
+msgid "Soap4.me"
+msgstr "Soap4.me"
+
+msgctxt "#30010"
+msgid "Authentication"
+msgstr "Авторизация"
+
+msgctxt "#30011"
+msgid "Login"
+msgstr "Ваш логин"
+
+msgctxt "#30012"
+msgid "Password"
+msgstr "Ваш пароль"
+
+msgctxt "#30020"
+msgid "Episode list"
+msgstr "Список видео"
+
+msgctxt "#30021"
+msgid "Maximum video quality"
+msgstr "Максимальное качество видео"
+
+msgctxt "#30022"
+msgid "Any"
+msgstr "Любоe"
+
+msgctxt "#30023"
+msgid "SD"
+msgstr "SD"
+
+msgctxt "#30024"
+msgid "720p"
+msgstr "720p"
+
+msgctxt "#30025"
+msgid "FullHD"
+msgstr "FullHD"
+
+msgctxt "#30026"
+msgid "4K"
+msgstr "4K"
+
+msgctxt "#30031"
+msgid "Available translation"
+msgstr "Перевод по возможности"
+
+msgctxt "#30032"
+msgid "Show all"
+msgstr "Показывать все"
+
+msgctxt "#30033"
+msgid "Subtitles"
+msgstr "Субтитры"
+
+msgctxt "#30034"
+msgid "Voice over"
+msgstr "Голос"
+
+msgctxt "#30041"
+msgid "Sort order"
+msgstr "Сортировка"
+
+msgctxt "#30042"
+msgid "Newer first"
+msgstr "Сначала новые"
+
+msgctxt "#30043"
+msgid "Older first"
+msgstr "Сначала старые"
+
+msgctxt "#30100"
+msgid "Settings"
+msgstr "Параметры"
+
+msgctxt "#30110"
+msgid "Player settings"
+msgstr "Параметры воспроизведения"
+
+msgctxt "#30111"
+msgid "Preferred audio stream"
+msgstr "Предпочитаемая аудиодорожка"
+
+msgctxt "#30112"
+msgid "Default"
+msgstr "По-умолчанию"
+
+msgctxt "#30113"
+msgid "Translated"
+msgstr "Перевод"
+
+msgctxt "#30114"
+msgid "Original"
+msgstr "Оригинал"
+
+msgctxt "#30115"
+msgid "Preferred subtitles"
+msgstr "Предпочитаемые субтитры"
+
+msgctxt "#30116"
+msgid "Default"
+msgstr "По-умолчанию"
+
+msgctxt "#30117"
+msgid "Translated"
+msgstr "Перевод"
+
+msgctxt "#30118"
+msgid "Original"
+msgstr "Оригинал"
+
+msgctxt "#30119"
+msgid "None"
+msgstr "Выключить"
+
+msgctxt "#30130"
+msgid "Miscellaneous"
+msgstr "Прочее"
+
+msgctxt "#30131"
+msgid "Open unwatched season"
+msgstr "Открывать непросмотренный сезон"
+
+msgctxt "#30132"
+msgid "Hide watched finished shows"
+msgstr "Скрывать просмотренные законченные сериалы"
+
+msgctxt "#30133"
+msgid "Clear cache"
+msgstr "Стереть кеши"
+
+msgctxt "#32001"
+msgid "My shows"
+msgstr "Мои сериалы"
+
+msgctxt "#32002"
+msgid "All shows"
+msgstr "Все сериалы"
+
+msgctxt "#32003"
+msgid "Continue watching"
+msgstr "Досмотреть начатое"
+
+msgctxt "#32004"
+msgid "Recommended"
+msgstr "Что еще посмотреть?"
+
+msgctxt "#32011"
+msgid "Last 20 episodes"
+msgstr "Последние 20 эпизодов"
+
+msgctxt "#32012"
+msgid "Unwatched episodes"
+msgstr "C непросмотренными эпизодами"
+
+msgctxt "#32021"
+msgid "Original"
+msgstr "Оригинал"
+
+msgctxt "#32022"
+msgid "Subtitles"
+msgstr "Субтитры"
+
+msgctxt "#32023"
+msgid "RusSub"
+msgstr "РусСуб"
+
+msgctxt "#32024"
+msgid "Translated"
+msgstr "Перевод"
+
+msgctxt "#32031"
+msgid "{0} days left"
+msgstr "Осталось {0} дней"
+
+msgctxt "#32032"
+msgid "({0} views)"
+msgstr "({0} просмотров)"
+
+msgctxt "#32041"
+msgid "Add to My shows"
+msgstr "Добавить в мои сериалы"
+
+msgctxt "#32042"
+msgid "Remove from My shows"
+msgstr "Убрать из моих сериалов"
+
+msgctxt "#32043"
+msgid "Mark as Not watched"
+msgstr "Пометить как непросмотренный"
+
+msgctxt "#32044"
+msgid "Mark as Watched"
+msgstr "Пометить как просмотренный"
+
+msgctxt "#32101"
+msgid "Play"
+msgstr "Воспроизвести"
+
+msgctxt "#32102"
+msgid "From {0}"
+msgstr "С {0}"
+
+msgctxt "#32103"
+msgid "From beginning"
+msgstr "Сначала"
+
+msgctxt "#32201"
+msgid "Error"
+msgstr "Ошибка"
+
+msgctxt "#32202"
+msgid "Error: {0}"
+msgstr "Ошибка: {0}"
+
+msgctxt "#32203"
+msgid "Authentication error"
+msgstr "Ошибка авторизации"
+
+msgctxt "#32204"
+msgid "Login or password are incorrect"
+msgstr "Неверное имя пользователя или пароль"
+
+msgctxt "#32211"
+msgid "Done"
+msgstr "Выполнено"
