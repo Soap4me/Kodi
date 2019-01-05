@@ -1230,6 +1230,7 @@ def kodi_draw_list(parts, rows):
     xbmcplugin.addSortMethod(h, xbmcplugin.SORT_METHOD_VIDEO_RATING)
     xbmcplugin.addSortMethod(h, xbmcplugin.SORT_METHOD_VIDEO_YEAR)
     xbmcplugin.addSortMethod(h, xbmcplugin.SORT_METHOD_DATE)
+    xbmcplugin.setContent(h, 'files')
     xbmcplugin.endOfDirectory(h)
 
 class KodiUrl(object):
