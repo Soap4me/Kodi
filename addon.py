@@ -33,8 +33,6 @@ except:
     import md5 as hashlib
 
 from collections import defaultdict
-import urllib.request, urllib.parse, urllib.error
-import urllib.request, urllib.error, urllib.parse
 import http.cookiejar
 import gzip
 import json
