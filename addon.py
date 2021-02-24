@@ -3,7 +3,7 @@
 
 
 import xbmc, xbmcgui, xbmcplugin, xbmcaddon
-import urllib, os, sys
+import urllib.request, urllib.parse, urllib.error, os, sys
 import datetime as dt
 from collections import namedtuple
 import resources.lib.localization as l
@@ -14,7 +14,7 @@ try:
 except:
     pass
 
-__version__ = '1.0.20'
+__version__ = '1.0.21'
 __settings__ = xbmcaddon.Addon(id='plugin.video.soap4.me')
 
 DEBUG = False
@@ -33,12 +33,12 @@ except:
     import md5 as hashlib
 
 from collections import defaultdict
-import urllib
-import urllib2
-import cookielib
+import urllib.request, urllib.parse, urllib.error
+import urllib.request, urllib.error, urllib.parse
+import http.cookiejar
 import gzip
 import json
-import StringIO
+import io
 import shutil
 import time
 
@@ -273,7 +273,7 @@ class SoapVideo(object):
 
         xbmc.sleep(1000)
 
-        while p.is_soap_play(self.url) and not xbmc.abortRequested:
+        while p.is_soap_play(self.url) and not xbmc.Monitor().abortRequested:
             xbmc.sleep(1000)
 
         return
@@ -288,7 +288,7 @@ class SoapCache(object):
         self.lifetime = lifetime
 
     def get(self, cache_id, use_lifetime=True):
-        cache_id = filter(lambda c: c not in ",./", cache_id)
+        cache_id = [c for c in cache_id if c not in ",./"]
         filename = os.path.join(self.path, str(cache_id))
         if not os.path.exists(filename) or not os.path.isfile(filename):
             return False
@@ -297,17 +297,17 @@ class SoapCache(object):
         if use_lifetime and self and os.path.getmtime(filename) <= max_time:
             return False
 
-        with open(filename, "r") as f:
+        with open(filename, "rb") as f:
             return f.read()
 
     def set(self, cache_id, text):
-        cache_id = filter(lambda c: c not in ",./", cache_id)
+        cache_id = [c for c in cache_id if c not in ",./"]
         filename = os.path.join(self.path, str(cache_id))
-        with open(filename, "w") as f:
+        with open(filename, "wb") as f:
             f.write(text)
 
     def rm(self, cache_id):
-        cache_id = filter(lambda c: c not in ",./", cache_id)
+        cache_id = [c for c in cache_id if c not in ",./"]
         filename = os.path.join(self.path, str(cache_id))
         if os.path.exists(filename):
             os.remove(filename)
@@ -319,7 +319,7 @@ class SoapCache(object):
 
 class SoapCookies(object):
     def __init__(self):
-        self.CJ = cookielib.CookieJar()
+        self.CJ = http.cookiejar.CookieJar()
         self._cookies = None
         self.path = soappath
 
@@ -327,9 +327,9 @@ class SoapCookies(object):
         if self.CJ is None:
             return
 
-        urllib2.install_opener(
-            urllib2.build_opener(
-                urllib2.HTTPCookieProcessor(self.CJ)
+        urllib.request.install_opener(
+            urllib.request.build_opener(
+                urllib.request.HTTPCookieProcessor(self.CJ)
             )
         )
 
@@ -351,7 +351,7 @@ class SoapCookies(object):
                 cf.close()
                 # else: print '[%s]: NOT os.path.isfile(cookie_file=%s)' % (addon_id, cookie_file)
 
-        cookie_string = urllib.urlencode(cookie_send).replace('&', '; ')
+        cookie_string = urllib.parse.urlencode(cookie_send).replace('&', '; ')
         req.add_header('Cookie', cookie_string)
 
     def _cookies_save(self):
@@ -379,14 +379,13 @@ class SoapHttpClient(SoapCookies):
     def _post_data(self, params=None):
         if not isinstance(params, dict):
             return None
-
-        return urllib.urlencode(params)
+        return urllib.parse.urlencode(params).encode('utf-8')
 
     def _request(self, url, params=None):
         xbmc.log('REQUEST: {0} {1} {2}'.format(url, params, sys.argv[1]))
         self._cookies_init()
 
-        req = urllib2.Request(self.HOST + url)
+        req = urllib.request.Request(self.HOST + url)
         req.add_header('User-Agent', 'Kodi: plugin.soap4me v{0}'.format(__version__))
         req.add_header('Accept-encoding', 'gzip')
         req.add_header('Kodi-Debug', '{0} {1}'.format(xbmc.getInfoLabel('System.BuildVersion'), sys.argv[1]))
@@ -399,14 +398,14 @@ class SoapHttpClient(SoapCookies):
         if params is not None:
             req.add_header('Content-Type', 'application/x-www-form-urlencoded')
         
-        response = urllib2.urlopen(req, post_data)
+        response = urllib.request.urlopen(req, post_data)
 
 
         self._cookies_save()
 
         text = None
         if response.info().get('Content-Encoding') == 'gzip':
-            buffer = StringIO.StringIO(response.read())
+            buffer = io.BytesIO(response.read())
             fstream = gzip.GzipFile(fileobj=buffer)
             text = fstream.read()
         else:
@@ -627,10 +626,10 @@ class SoapAuth(object):
 
 
 def _color(color, text):
-    return u"[COLOR={0}]{1}[/COLOR]".format(color, text)
+    return "[COLOR={0}]{1}[/COLOR]".format(color, text)
 
 def _light(text):
-    return u"[LIGHT]{0}[/LIGHT]".format(text)
+    return "[LIGHT]{0}[/LIGHT]".format(text)
 
 if (xbmc.__version__ < '2.24.0') or (xbmc.getSkinDir() != 'skin.estuary'):
     _light = lambda text: text
@@ -657,13 +656,10 @@ class MenuRow(object):
 
         vtype = 'video'
 
+        li = xbmcgui.ListItem(label=self.title)
+        li.setArt({'icon':str(self.img)})
+        li.setArt({'thumb':str(self.img)})
 
-        li = xbmcgui.ListItem(
-            label=self.title,
-
-            iconImage=str(self.img),
-            thumbnailImage=str(self.img)
-        )
         if self.is_watched:
             info["playcount"] = 10
 
@@ -681,31 +677,31 @@ class MenuRow(object):
     @staticmethod
     def get_new(count):
         if count > 0:
-            return u"  " + _color("AAAAAAAA", _light("({0})".format(count)))
+            return "  " + _color("AAAAAAAA", _light("({0})".format(count)))
         else:
             return ""
 
     @staticmethod
     def count_watching(count):
         if count > 0:
-            return u"  " + _color("AAAAAAAA", _light(l.views.format(count)))
+            return "  " + _color("AAAAAAAA", _light(l.views.format(count)))
         else:
             return ""
 
     @staticmethod
     def get_meta_title(episode_file):
-        quality = u"[{0}]".format(SoapConfig.name_quality(int(episode_file['quality'])))
-        translate = u"[{0}]".format(SoapConfig.name_translate(int(episode_file['translate'])))
-        return _light(u"{0}{1}".format(
+        quality = "[{0}]".format(SoapConfig.name_quality(int(episode_file['quality'])))
+        translate = "[{0}]".format(SoapConfig.name_translate(int(episode_file['translate'])))
+        return _light("{0}{1}".format(
             _color("AAAACCAA", quality),
             _color("AAAAAACC", translate)
         ))
 
     @staticmethod
     def get_episode_num(episode):
-        return _light(u'{0}{1}'.format(
-            _color(u"99CCAAAA", u"S{0}".format(int(episode['season']))),
-            _color(u"99AACCAA", u"E{0:02}".format(int(episode['episode'])))
+        return _light('{0}{1}'.format(
+            _color("99CCAAAA", "S{0}".format(int(episode['season']))),
+            _color("99AACCAA", "E{0:02}".format(int(episode['episode'])))
         ))
 
 
@@ -719,19 +715,19 @@ class SoapSerial(object):
         return self.data.get('watching', 0) == 1 and self.data.get('unwatched', -1) == 0
 
     def is_finished(self):
-        return self.data.get('status', u'0') == u'1'
+        return self.data.get('status', '0') == '1'
 
     def get_context(self):
         param = 'A{sid}'.format(sid=self.sid)
                 
         return [
-            (l.add_to_my_shows, u'RunScript(plugin.video.soap4.me, watch, {0})'.format(self.sid))
+            (l.add_to_my_shows, 'RunScript(plugin.video.soap4.me, watch, {0})'.format(self.sid))
             if self.data.get('watching', 0) == 0 else
-            (l.remove_from_my_shows, u'RunScript(plugin.video.soap4.me, unwatch, {0})'.format(self.sid))
+            (l.remove_from_my_shows, 'RunScript(plugin.video.soap4.me, unwatch, {0})'.format(self.sid))
         ] + [
-            (l.mark_as_unwatched, u'RunScript(plugin.video.soap4.me, mark_unwatched, {0})'.format(param))
+            (l.mark_as_unwatched, 'RunScript(plugin.video.soap4.me, mark_unwatched, {0})'.format(param))
             if self.is_watched() else
-            (l.mark_as_watched, u'RunScript(plugin.video.soap4.me, mark_watched, {0})'.format(param))
+            (l.mark_as_watched, 'RunScript(plugin.video.soap4.me, mark_watched, {0})'.format(param))
         ]
 
     def menu(self):
@@ -777,13 +773,13 @@ class SoapEpisode(object):
         self.img = img or self.data.get('covers', {}).get('big')
 
     def label(self, f, with_soapname=False):
-        label =  u"{num}  {title}  {meta}".format(
+        label =  "{num}  {title}  {meta}".format(
                             num=MenuRow.get_episode_num(self.data),
                             title=self.title(),
                             meta=MenuRow.get_meta_title(f)
                         )
         if with_soapname:
-            label = u"{soapname}: {label}".format(soapname=self.soapname(), label=label)
+            label = "{soapname}: {label}".format(soapname=self.soapname(), label=label)
 
         return label
 
@@ -833,9 +829,9 @@ class SoapEpisode(object):
         )
         
         return [
-            (l.mark_as_unwatched, u'RunScript(plugin.video.soap4.me, mark_unwatched, {0})'.format(param))
+            (l.mark_as_unwatched, 'RunScript(plugin.video.soap4.me, mark_unwatched, {0})'.format(param))
             if self.is_watched() else
-            (l.mark_as_watched, u'RunScript(plugin.video.soap4.me, mark_watched, {0})'.format(param))
+            (l.mark_as_watched, 'RunScript(plugin.video.soap4.me, mark_watched, {0})'.format(param))
         ]
 
 
@@ -861,7 +857,7 @@ class SoapEpisodes(object):
         return len(self.episodes)
 
     def count_unwatched_seasons(self):
-        return len(filter(self.is_unwatched_season, self.episodes))
+        return len(list(filter(self.is_unwatched_season, self.episodes)))
 
     def first_season(self):
         return self.seasons[0]
@@ -875,11 +871,11 @@ class SoapEpisodes(object):
                 {'season': season},
                 "Season {season}{new}".format(
                     season=season,
-                    new=MenuRow.get_new(sum(not ep.is_watched() for ep in self.episodes[season].values()))
+                    new=MenuRow.get_new(sum(not ep.is_watched() for ep in list(self.episodes[season].values())))
                 ),
                 img=self.covers.get(season),
                 is_folder=True,
-                is_watched=all(ep.is_watched() for ep in self.episodes[season].values()),
+                is_watched=all(ep.is_watched() for ep in list(self.episodes[season].values())),
                 context=self.get_context(season)
             )
             for season in self.seasons
@@ -890,12 +886,12 @@ class SoapEpisodes(object):
             sid=self.sid,
             season=season
         )
-        is_watched=all(ep.is_watched() for ep in self.episodes[season].values())
+        is_watched=all(ep.is_watched() for ep in list(self.episodes[season].values()))
         
         return [
-            (l.mark_as_unwatched, u'RunScript(plugin.video.soap4.me, mark_unwatched, {0})'.format(param))
+            (l.mark_as_unwatched, 'RunScript(plugin.video.soap4.me, mark_unwatched, {0})'.format(param))
             if is_watched else
-            (l.mark_as_watched, u'RunScript(plugin.video.soap4.me, mark_watched, {0})'.format(param))
+            (l.mark_as_watched, 'RunScript(plugin.video.soap4.me, mark_watched, {0})'.format(param))
         ]
 
     def list_episodes(self, season, config):
@@ -903,7 +899,7 @@ class SoapEpisodes(object):
             #TODO show error
             raise Exception
 
-        episodes = self.episodes[season].keys()
+        episodes = list(self.episodes[season].keys())
         episodes.sort()
 
 
@@ -927,7 +923,7 @@ class SoapEpisodes(object):
         }, self.covers.get(season)
 
     def is_unwatched_season(self, season):
-        return not all(ep.is_watched() for ep in self.episodes[season].values())
+        return not all(ep.is_watched() for ep in list(self.episodes[season].values()))
 
 
 class SoapApi(object):
@@ -1024,7 +1020,7 @@ class SoapApi(object):
         def _request():
             try:
                 data = self.client.request(url, use_cache=use_cache)
-            except urllib2.HTTPError as err:
+            except urllib.error.HTTPError as err:
                 if err.code == 404:
                     return self.EMPTY_RESULT
                 raise
@@ -1060,10 +1056,10 @@ class SoapApi(object):
         ]
 
         if filters.get('unwatched'):
-            result = filter(lambda s: not s.is_watched, result)
+            result = [s for s in result if not s.is_watched]
 
         if filters.get('hide_watched_finished'):
-            result = filter(lambda s: not (s.is_watched and s.is_finished), result)
+            result = [s for s in result if not (s.is_watched and s.is_finished)]
 
         return result
 
@@ -1091,12 +1087,19 @@ class SoapApi(object):
 
 
     def _get_video(self, sid, eid, ehash):
-        myhash = hashlib.md5(
+        myhash = (
             str(self.client.token) + \
             str(eid) + \
             str(sid) + \
             str(ehash)
-        ).hexdigest()
+        ).encode('utf-8')
+        myhash = hashlib.md5(myhash).hexdigest()
+        # myhash = hashlib.md5(
+        #     str(self.client.token) + \
+        #     str(eid) + \
+        #     str(sid) + \
+        #     str(ehash)
+        # ).hexdigest()
 
         data = {
             "eid": eid,
@@ -1131,8 +1134,10 @@ class SoapApi(object):
     def get_play(self, all_episodes, season, epnum, eid):
         ep_data, img = all_episodes.get_episode(season, epnum, eid)
         data = self._get_video(**ep_data)
-        li = xbmcgui.ListItem(data['title'], iconImage=img, thumbnailImage=img)
-
+        #li = xbmcgui.ListItem(data['title'], iconImage=img, thumbnailImage=img)
+        li = xbmcgui.ListItem(data['title'])
+        li.setArt({'icon':str(img)})
+        li.setArt({'thumb':str(img)})
         sv = SoapVideo(
             ep_data['eid'],
             data['stream'],
@@ -1152,7 +1157,7 @@ class SoapApi(object):
         data = self.client.request(self.MARKER_URL[event].format(sid=sid), params)
 
         if not isinstance(data, dict):
-            return False, u'Bad response'
+            return False, 'Bad response'
 
         if data.get('ok', 0) == 1:
             return True, None
@@ -1245,12 +1250,12 @@ class KodiUrl(object):
         url_params = sys.argv[2][1:]
 
         parts = url_params.split('&')
-        parts = filter(None, parts)
-        params = map(lambda x: x.split('=', 1), parts)
+        parts = [_f for _f in parts if _f]
+        params = [x.split('=', 1) for x in parts]
         result = dict()
 
         for k, v in params:
-            result[urllib.unquote(k)] = urllib.unquote(v)
+            result[urllib.parse.unquote(k)] = urllib.parse.unquote(v)
 
         return KodiUrl(result)
 
@@ -1261,7 +1266,7 @@ class KodiUrl(object):
             if getattr(self, key) is not None or link.get(key) is not None
         ])
 
-        return sys.argv[0] + "?{0}".format(urllib.urlencode(params))
+        return sys.argv[0] + "?{0}".format(urllib.parse.urlencode(params))
 
     def clear(self):
         for key in self.__slots__:
@@ -1269,8 +1274,8 @@ class KodiUrl(object):
 
 def kodi_parse_uri():
     #print "Soap: " + sys.argv[2] + ' $$$$$$'
-    return [(a,urllib.unquote(b)) for (a, b) in [p.split('=', 1) for p in sss.split('&')]]
-    return urllib.unquote(sys.argv[2])[6:].split("/")
+    return [(a,urllib.parse.unquote(b)) for (a, b) in [p.split('=', 1) for p in sss.split('&')]]
+    return urllib.parse.unquote(sys.argv[2])[6:].split("/")
 
 def debug(func):
     if not DEBUG:
@@ -1314,7 +1319,7 @@ if sys.argv[1] == 'clearcache':
     message_ok(l.done)
     exit(0)
 
-if sys.argv[1] == u'watch' or sys.argv[1] == u'unwatch':
+if sys.argv[1] == 'watch' or sys.argv[1] == 'unwatch':
     api = SoapApi()
 
     if not api.is_auth:
@@ -1332,7 +1337,7 @@ if sys.argv[1] == u'watch' or sys.argv[1] == u'unwatch':
 
     exit(0)
 
-if sys.argv[1] == u'mark_watched' or sys.argv[1] == u'mark_unwatched':
+if sys.argv[1] == 'mark_watched' or sys.argv[1] == 'mark_unwatched':
     api = SoapApi()
 
     if not api.is_auth:
@@ -1341,7 +1346,7 @@ if sys.argv[1] == u'mark_watched' or sys.argv[1] == u'mark_unwatched':
     param = sys.argv[2]
     
     def parse(param):
-        return dict(zip(('sid', 'season', 'episode'), map(to_int, param.split('|'))))
+        return dict(list(zip(('sid', 'season', 'episode'), list(map(to_int, param.split('|'))))))
 
     type = 'None'
     params = parse(param[1:])
@@ -1356,7 +1361,7 @@ if sys.argv[1] == u'mark_watched' or sys.argv[1] == u'mark_unwatched':
 
 
     
-    mark_fun = api.mark_watched if sys.argv[1] == u'mark_watched' else api.mark_unwatched
+    mark_fun = api.mark_watched if sys.argv[1] == 'mark_watched' else api.mark_unwatched
     res = mark_fun(type, params)
     
     api.client.clean_all()
@@ -1373,4 +1378,3 @@ if sys.argv[1] == u'mark_watched' or sys.argv[1] == u'mark_unwatched':
 
 
 addon_main()
-
