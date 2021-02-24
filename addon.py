@@ -5,7 +5,6 @@
 import xbmc, xbmcgui, xbmcplugin, xbmcaddon
 import urllib.request, urllib.parse, urllib.error, os, sys
 import datetime as dt
-from collections import namedtuple
 import resources.lib.localization as l
 
 try:
@@ -26,7 +25,6 @@ try:
     import json
 except:
     import simplejson as json
-import sys
 try:
     import hashlib
 except:
@@ -35,7 +33,6 @@ except:
 from collections import defaultdict
 import http.cookiejar
 import gzip
-import json
 import io
 import shutil
 import time
