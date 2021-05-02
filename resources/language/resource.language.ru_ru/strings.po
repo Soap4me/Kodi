@@ -1,6 +1,6 @@
 # Kodi Media Center language file
 # Addon Name: Soap4.me
-# Addon id: plugin.video.soap4.me
+# Addon id: plugin.video.soap4-py2.me
 # Addon Provider: info@soap4.me
 msgid ""
 msgstr ""

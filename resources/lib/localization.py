@@ -1,6 +1,6 @@
 import xbmcaddon
 
-__settings__ = xbmcaddon.Addon(id='plugin.video.soap4.me')
+__settings__ = xbmcaddon.Addon(id='plugin.video.soap4-py2.me')
 loc_str = __settings__.getLocalizedString
 
 my_shows = loc_str(32001)

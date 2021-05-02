@@ -14,8 +14,8 @@ try:
 except:
     pass
 
-__version__ = '1.0.20'
-__settings__ = xbmcaddon.Addon(id='plugin.video.soap4.me')
+__version__ = '1.0.21'
+__settings__ = xbmcaddon.Addon(id='plugin.video.soap4-py2.me')
 
 DEBUG = False
 
@@ -42,7 +42,7 @@ import StringIO
 import shutil
 import time
 
-__addon__ = xbmcaddon.Addon(id = 'plugin.video.soap4.me')
+__addon__ = xbmcaddon.Addon(id = 'plugin.video.soap4-py2.me')
 
 addon_icon      = __addon__.getAddonInfo('icon')
 addon_fanart  = __addon__.getAddonInfo('fanart')
@@ -725,13 +725,13 @@ class SoapSerial(object):
         param = 'A{sid}'.format(sid=self.sid)
                 
         return [
-            (l.add_to_my_shows, u'RunScript(plugin.video.soap4.me, watch, {0})'.format(self.sid))
+            (l.add_to_my_shows, 'RunScript(plugin.video.soap4-py2.me, watch, {0})'.format(self.sid))
             if self.data.get('watching', 0) == 0 else
-            (l.remove_from_my_shows, u'RunScript(plugin.video.soap4.me, unwatch, {0})'.format(self.sid))
+            (l.remove_from_my_shows, 'RunScript(plugin.video.soap4-py2.me, unwatch, {0})'.format(self.sid))
         ] + [
-            (l.mark_as_unwatched, u'RunScript(plugin.video.soap4.me, mark_unwatched, {0})'.format(param))
+            (l.mark_as_unwatched, 'RunScript(plugin.video.soap4-py2.me, mark_unwatched, {0})'.format(param))
             if self.is_watched() else
-            (l.mark_as_watched, u'RunScript(plugin.video.soap4.me, mark_watched, {0})'.format(param))
+            (l.mark_as_watched, 'RunScript(plugin.video.soap4-py2.me, mark_watched, {0})'.format(param))
         ]
 
     def menu(self):
@@ -833,9 +833,9 @@ class SoapEpisode(object):
         )
         
         return [
-            (l.mark_as_unwatched, u'RunScript(plugin.video.soap4.me, mark_unwatched, {0})'.format(param))
+            (l.mark_as_unwatched, 'RunScript(plugin.video.soap4-py2.me, mark_unwatched, {0})'.format(param))
             if self.is_watched() else
-            (l.mark_as_watched, u'RunScript(plugin.video.soap4.me, mark_watched, {0})'.format(param))
+            (l.mark_as_watched, 'RunScript(plugin.video.soap4-py2.me, mark_watched, {0})'.format(param))
         ]
 
 
@@ -893,9 +893,9 @@ class SoapEpisodes(object):
         is_watched=all(ep.is_watched() for ep in self.episodes[season].values())
         
         return [
-            (l.mark_as_unwatched, u'RunScript(plugin.video.soap4.me, mark_unwatched, {0})'.format(param))
+            (l.mark_as_unwatched, 'RunScript(plugin.video.soap4-py2.me, mark_unwatched, {0})'.format(param))
             if is_watched else
-            (l.mark_as_watched, u'RunScript(plugin.video.soap4.me, mark_watched, {0})'.format(param))
+            (l.mark_as_watched, 'RunScript(plugin.video.soap4-py2.me, mark_watched, {0})'.format(param))
         ]
 
     def list_episodes(self, season, config):

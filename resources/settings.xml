@@ -24,6 +24,6 @@
         <setting label="30130" type="lsep" />
         <setting id="list_unwatched_season" type="bool" label="30131" default="false" />
         <setting id="hide_watched_finished" type="bool" label="30132" default="false"/>
-        <setting label="30133" type="action" action="RunScript(plugin.video.soap4.me, clearcache)" />
+        <setting label="30133" type="action" action="RunScript(plugin.video.soap4-py2.me, clearcache)" />
     </category>
 </settings>
