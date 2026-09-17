@@ -1359,6 +1359,9 @@ class SoapApi(object):
     class EMPTY_RESULT(object):
         pass
 
+    class SOFT_ERROR(object):
+        pass
+
     def __init__(self):
         self.client = SoapHttpClient()
         self.auth = SoapAuth(self.client)
@@ -1414,6 +1417,14 @@ class SoapApi(object):
         ]
 
     def get_list(self, sid, use_cache=True):
+        # NOTE: this used to conflate "the API returned a real error" with
+        # "the API returned a legitimately empty list" (both fell through
+        # Python's `if not data:` truthiness check, since `[]` is falsy
+        # too). That meant a brand-new, genuinely empty "my movies" list
+        # was indistinguishable from a failed request -- it would
+        # pointlessly re-auth, get [] again, and raise. SOFT_ERROR below
+        # is a real error signal; EMPTY_RESULT/a plain empty list/dict is
+        # valid data and returned as-is, no retry.
         if sid in self.LISTS_URL:
             url = self.LISTS_URL[sid]
         else:
@@ -1431,19 +1442,19 @@ class SoapApi(object):
                     and data.get('ok', 'None') == 0 \
                     and data.get('error', '') != '':
                 self.client.clean(url)
-                return []
+                return self.SOFT_ERROR
 
             return data
 
         data = _request()
-        if not data:
+        if data is self.SOFT_ERROR:
             self.auth.auth()
             data = _request()
-            if not data:
+            if data is self.SOFT_ERROR:
                 self.client.clean(url)
                 raise Exception('Error with request')
 
-        if data is self.EMPTY_RESULT:
+        if data is self.EMPTY_RESULT or data is self.SOFT_ERROR:
             return []
 
         return data
