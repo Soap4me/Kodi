@@ -2,6 +2,7 @@
 <addon id="plugin.video.soap4.me" name="Soap4.me" version="1.2.0" provider-name="info@soap4.me">
     <requires>
         <import addon="xbmc.python" version="3.0.1"/>
+        <import addon="inputstream.adaptive" version="2.6.0"/>
     </requires>
     <extension point="xbmc.python.pluginsource" library="addon.py">
         <provides>video</provides>

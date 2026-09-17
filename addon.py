@@ -5,6 +5,7 @@
 import xbmc, xbmcgui, xbmcplugin, xbmcaddon, xbmcvfs
 import urllib.request, urllib.parse, urllib.error, os, sys
 import datetime as dt
+import re
 import resources.lib.localization as l
 
 try:
@@ -83,7 +84,11 @@ ACTIONS = (
     'watch',
     'unwatch',
     'mark_watched',
-    'mark_unwatched'
+    'mark_unwatched',
+    'mark_movie_watched',
+    'mark_movie_unwatched',
+    'movie_like',
+    'movie_unlike'
 )
 
 if sys.argv[1] not in ACTIONS:
@@ -926,6 +931,347 @@ class SoapEpisodes(object):
         return not all(ep.is_watched() for ep in list(self.episodes[season].values()))
 
 
+class SoapMovie(object):
+    """
+    A single movie record from the /movies/ list or the
+    /movies/description/{id}/ detail call.
+
+    Unlike shows and episodes, a movie is one playable item: soap4.me
+    serves an adaptive HLS master playlist with all qualities, so there is
+    no per-quality variant selection. The detail call returns the playlist
+    URL directly as 'stream_url', plus 'start_from' for resume.
+    """
+
+    def __init__(self, mid, data=None):
+        self.mid = mid
+        self.data = data or {}
+
+    def is_watched(self):
+        # Movies use a JSON boolean, unlike the show API's 0/1 integer.
+        return bool(self.data.get('watched'))
+
+    def title(self):
+        # 'title' is the display title; there is no 'title_en' like shows have.
+        raw = self.data.get('title') or self.data.get('title_original') or ''
+        return raw.replace('&#039;', "'").replace("&amp;", "&").replace('&quot;', '"')
+
+    def is_liked(self):
+        return bool(self.data.get('liked'))
+
+    def get_context(self):
+        param = str(self.mid)
+
+        # The movie strings aren't in localization.py yet, so fall back to
+        # English (same as the Movies / My Movies menu labels).
+        add_label = getattr(l, 'add_to_my_movies', 'Add to My Movies')
+        remove_label = getattr(l, 'remove_from_my_movies', 'Remove from My Movies')
+
+        return [
+            # "My Movies" membership follows 'liked', not 'watched'.
+            (remove_label, 'RunScript(plugin.video.soap4.me, movie_unlike, {0})'.format(param))
+            if self.is_liked() else
+            (add_label, 'RunScript(plugin.video.soap4.me, movie_like, {0})'.format(param))
+        ] + [
+            (l.mark_as_unwatched, 'RunScript(plugin.video.soap4.me, mark_movie_unwatched, {0})'.format(param))
+            if self.is_watched() else
+            (l.mark_as_watched, 'RunScript(plugin.video.soap4.me, mark_movie_watched, {0})'.format(param))
+        ]
+
+    @staticmethod
+    def _parse_runtime_minutes(runtime):
+        """
+        Parse a runtime like "1ч 50м" (Russian hours/minutes) into minutes,
+        as Kodi's Duration expects. Returns None if it doesn't match rather
+        than guessing.
+        """
+        if not runtime:
+            return None
+
+        match = re.match(r'\s*(?:(\d+)\s*ч)?\s*(?:(\d+)\s*м)?', runtime)
+        if not match or not (match.group(1) or match.group(2)):
+            return None
+
+        hours = int(match.group(1)) if match.group(1) else 0
+        minutes = int(match.group(2)) if match.group(2) else 0
+        return hours * 60 + minutes
+
+    def menu(self):
+        """Directly playable row for the Movies list (no variant drill-down)."""
+        title = self.title()
+        year = self.data.get('year')
+        runtime_raw = self.data.get('runtime')
+        title_ru = self.data.get('title_ru')
+
+        meta = {
+            'IMDBNumber': self.data.get('imdb_id'),
+            'Votes': self.data.get('imdb_votes'),
+            'Rating': self.data.get('imdb_rating'),
+            'Year': year,
+            # Comma-separated ("US, ZA, NZ"); the key is 'countries', not 'country'.
+            'Country': self.data.get('countries'),
+        }
+
+        duration = self._parse_runtime_minutes(runtime_raw)
+        if duration:
+            meta['Duration'] = duration
+
+        if self.data.get('updated'):
+            ts = dt.datetime.fromtimestamp(float(self.data.get('updated', 0)))
+            meta['Date'] = ts.strftime('%d-%m-%Y')
+
+        # The /movies/ list has no synopsis (only the detail call does) and
+        # fetching it per row isn't worth an API call each, so fall back to a
+        # short composed line. A SoapMovie built from detail data uses the
+        # real synopsis.
+        description = self.data.get('description')
+        if not description:
+            description = ' \u2022 '.join(
+                str(p) for p in (title_ru, year, runtime_raw) if p
+            )
+
+        return MenuRow(
+            {'page': 'PlayMovie', 'sid': str(self.mid)},
+            title,
+            description,
+            img=self.data.get('covers', {}).get('big'),
+            is_folder=False,
+            is_watched=self.is_watched(),
+            meta=meta,
+            context=self.get_context()
+        )
+
+
+class SoapWebClient(object):
+    """
+    Talks to the soap4.me website, which has a separate cookie-based
+    (PHPSESSID) login from api.soap4.me -- SoapAuth's login doesn't work
+    here. Used for liking movies and setting their watched state, and as a
+    fallback for the playback URL if
+    the API's 'stream_url' is ever empty (see SoapApi.get_play_movie()).
+
+    Login:      POST /login/ (login=<user>&password=<pass>) sets the
+                session cookie.
+    Movie page: GET /movies/{id}/ contains a `new Playerjs({...})` call;
+                'file' is the master.m3u8 stream and 'subtitle' is a
+                comma-separated "[Label]/relative/path.srt" list. The
+                subtitles are parsed best-effort and not verified against
+                Kodi's player.
+    """
+    HOST = 'https://soap4.me'
+    LOGIN_URL = '/login/'
+    MOVIE_PAGE_URL = '/movies/{0}/'
+
+    FILE_RE = re.compile(r'file:\s*"([^"]+)"')
+    SUBTITLE_RE = re.compile(r"subtitle:\s*'([^']*)'")
+    SUBTITLE_ENTRY_RE = re.compile(r'\[[^\]]*\]([^,]+)')
+    # Every page embeds a website-specific API token in a hidden
+    # <input name="token">. The like endpoint validates this one; the
+    # api.soap4.me token gets a 401.
+    WEB_TOKEN_RE = re.compile(
+        r'<input[^>]+name=[\'"]token[\'"][^>]+value=[\'"]([a-f0-9]{40})[\'"]'
+        r'|<input[^>]+value=[\'"]([a-f0-9]{40})[\'"][^>]+name=[\'"]token[\'"]',
+        re.IGNORECASE
+    )
+
+    def __init__(self):
+        self.cookie_dir = os.path.join(soappath, 'web_cookies')
+        self.cj = http.cookiejar.MozillaCookieJar()
+        self.web_token = None  # scraped from page HTML after login
+        # urllib doesn't run the cookie processor on redirect responses, so
+        # a login POST's Set-Cookie would be lost. Don't follow redirects.
+        class NoRedirect(urllib.request.HTTPRedirectHandler):
+            def redirect_request(self, req, fp, code, msg, headers, newurl):
+                return None  # don't follow; let the caller see the 302
+
+        self.opener = urllib.request.build_opener(
+            urllib.request.HTTPCookieProcessor(self.cj),
+            NoRedirect()
+        )
+        self._load_cookies()
+
+    def _load_cookies(self):
+        if not os.path.exists(self.cookie_dir):
+            os.makedirs(self.cookie_dir)
+            return
+        cookie_file = os.path.join(self.cookie_dir, 'cookies.txt')
+        if os.path.exists(cookie_file):
+            try:
+                self.cj.load(cookie_file, ignore_discard=True, ignore_expires=True)
+            except Exception as e:
+                xbmc.log('SOAP4ME WEB cookie load failed: {0}'.format(e))
+
+    def _save_cookies(self):
+        if not os.path.exists(self.cookie_dir):
+            os.makedirs(self.cookie_dir)
+        cookie_file = os.path.join(self.cookie_dir, 'cookies.txt')
+        try:
+            self.cj.save(cookie_file, ignore_discard=True, ignore_expires=True)
+        except Exception as e:
+            xbmc.log('SOAP4ME WEB cookie save failed: {0}'.format(e))
+
+    # Liking goes through the website's own API proxy rather than
+    # api.soap4.me, with the id in the POST body instead of the URL.
+    API_PROXY_LIKE_URL = '/api/v2/movies/like/'
+
+    # Watched state has separate, explicit endpoints on the same proxy.
+    API_PROXY_WATCH_URL = '/api/v2/movies/watch/{mid}'
+    API_PROXY_UNWATCH_URL = '/api/v2/movies/unwatch/{mid}'
+
+    def _request(self, path, data=None, token=None):
+        req = urllib.request.Request(self.HOST + path)
+        req.add_header('User-Agent', 'Mozilla/5.0 (Kodi plugin.video.soap4.me movies)')
+        if token is not None:
+            # The API-proxy path needs this header in addition to the session cookie.
+            req.add_header('X-API-Token', token)
+        post_data = None
+        if data is not None:
+            post_data = urllib.parse.urlencode(data).encode('utf-8')
+            req.add_header('Content-Type', 'application/x-www-form-urlencoded')
+
+        try:
+            response = self.opener.open(req, post_data, timeout=15)
+            status = response.status
+            body = response.read().decode('utf-8', 'replace')
+            response.close()
+        except urllib.error.HTTPError as e:
+            status = e.code
+            body = e.read().decode('utf-8', 'replace')
+
+        self._save_cookies()
+        return status, body
+
+    def login(self):
+        creds = KodiConfig.kodi_get_auth()
+        # The session cookie is set by the GET of the login page, so it has
+        # to come before the POST.
+        self._request(self.LOGIN_URL)
+        status, body = self._request(self.LOGIN_URL, {
+            'login': creds['login'],
+            'password': creds['password']
+        })
+        if status not in (200, 302):
+            xbmc.log('SOAP4ME WEB LOGIN unexpected status {0}'.format(status))
+
+        # Scrape the website's API token (see WEB_TOKEN_RE) from an
+        # authenticated page, using an opener that follows redirects.
+        scrape_opener = urllib.request.build_opener(
+            urllib.request.HTTPCookieProcessor(self.cj)
+        )
+        for path in ['/', '/movies/']:
+            try:
+                req = urllib.request.Request(self.HOST + path)
+                req.add_header('User-Agent', 'Mozilla/5.0 (Kodi plugin.video.soap4.me movies)')
+                req.add_header('Accept-Encoding', 'gzip, deflate')
+                with scrape_opener.open(req, timeout=15) as resp:
+                    raw = resp.read()
+                    if 'gzip' in resp.info().get('Content-Encoding', ''):
+                        raw = gzip.GzipFile(fileobj=io.BytesIO(raw)).read()
+                    page_body = raw.decode('utf-8', 'replace')
+                self._scrape_web_token(page_body)
+                if self.web_token:
+                    break
+            except Exception as e:
+                xbmc.log('SOAP4ME WEB token scrape error on {0}: {1}'.format(path, e))
+
+    def _scrape_web_token(self, html):
+        match = self.WEB_TOKEN_RE.search(html)
+        if match:
+            self.web_token = next(g for g in match.groups() if g)
+        else:
+            self.web_token = None
+            xbmc.log('SOAP4ME WEB token not found in page -- pattern may need updating')
+
+    def _movie_action(self, path, data, send_token=False, retry=True):
+        """
+        POST `data` to the website's API proxy and return the JSON reply.
+        Logs in first if there is no website token yet, and once more if the
+        session has expired. `send_token` also puts the token in the body,
+        which the watch/unwatch calls do.
+        """
+        if not self.web_token:
+            self.login()
+
+        payload = dict(data, token=self.web_token) if send_token else data
+        status, body = self._request(path, payload, token=self.web_token)
+
+        if status == 401 and retry:
+            self.web_token = None
+            return self._movie_action(path, data, send_token, retry=False)
+
+        try:
+            reply = json.loads(body)
+        except Exception:
+            reply = None
+            xbmc.log('SOAP4ME WEB {0}: non-JSON response (status={1}): {2}'.format(
+                path, status, body[:200]))
+
+        if isinstance(reply, dict) and reply.get('ok') == 1:
+            return reply
+
+        xbmc.log('SOAP4ME WEB {0} failed (status={1}): {2}'.format(path, status, reply))
+        raise SoapException('Movie request failed ({0}, status={1})'.format(path, status))
+
+    def set_movie_liked(self, mid, liked=True):
+        """
+        POST /api/v2/movies/like/  body: id=<mid>&sub=like&do=like|unlike
+        (the values the website's own bookmark button sends).
+        """
+        self._movie_action(self.API_PROXY_LIKE_URL, {
+            'id': mid,
+            'sub': 'like',
+            'do': 'like' if liked else 'unlike'
+        })
+
+    def set_movie_watched(self, mid, watched=True):
+        """
+        POST /api/v2/movies/watch/<mid> or /unwatch/<mid>, body: id=<mid>&token=<token>.
+        Unlike a toggle, repeating either call is harmless (the reply status
+        is 'already_watched' / 'not_watched').
+        """
+        url = self.API_PROXY_WATCH_URL if watched else self.API_PROXY_UNWATCH_URL
+        self._movie_action(url.format(mid=mid), {'id': mid}, send_token=True)
+
+    def _parse_subtitles(self, raw):
+        if not raw:
+            return []
+
+        urls = []
+        for match in self.SUBTITLE_ENTRY_RE.finditer(raw):
+            path = match.group(1).strip()
+            if not path:
+                continue
+            if path.startswith('http'):
+                urls.append(path)
+            else:
+                urls.append(self.HOST + ('' if path.startswith('/') else '/') + path)
+        return urls
+
+    def get_movie_stream(self, mid, retry=True):
+        status, html = self._request(self.MOVIE_PAGE_URL.format(mid))
+
+        file_match = self.FILE_RE.search(html)
+        if not file_match and retry:
+            # Not logged in / session expired -- log in and try once more.
+            self.login()
+            return self.get_movie_stream(mid, retry=False)
+
+        if not file_match:
+            raise SoapException('Could not find a playback URL on the movie page '
+                                 '-- soap4.me may have changed its page markup.')
+
+        subtitle_match = self.SUBTITLE_RE.search(html)
+        subtitles = []
+        try:
+            subtitles = self._parse_subtitles(subtitle_match.group(1) if subtitle_match else None)
+        except Exception:
+            subtitles = []  # best-effort only, never fail playback over subtitles
+
+        return {
+            'stream': file_match.group(1),
+            'subtitles': subtitles
+        }
+
+
 class SoapApi(object):
     EPISODES_URL = '/episodes/{0}/'
 
@@ -935,16 +1281,29 @@ class SoapApi(object):
         'all_last': '/episodes/new/',
         'my_last': '/episodes/new/my/',
         'continue': '/episodes/continue/',
-        'alive_for_me': '/soap/top/alive/?exclude=my'
+        'alive_for_me': '/soap/top/alive/?exclude=my',
+
+        # Movies
+        'movie_all': '/movies/',
+        'movie_my': '/movies/my/',
     }
 
     PLAY_EPISODES_URL = '/play/episode/{eid}/'
     SAVE_POSITION_URL = '/play/episode/{eid}/savets/'
 
+    # Full movie detail plus the playback URL ('stream_url', the HLS master
+    # playlist) and 'start_from' (resume position) in one response --
+    # unlike episodes, no separate play/hash-exchange step.
+    MOVIE_DESCRIPTION_URL = '/movies/description/{0}/'
+
     MARKER_URL = {
         'watch': '/soap/watch/{sid}/',
         'unwatch': '/soap/unwatch/{sid}/',
     }
+
+    # Path taken from the Android app's strings, mirroring SAVE_POSITION_URL
+    # for episodes. Param names are a guess and it's untested.
+    MOVIE_SAVE_POSITION_URL = '/movies/savets/{mid}/'
     
 
     WATCHING_URL = {
@@ -970,6 +1329,9 @@ class SoapApi(object):
         self.client = SoapHttpClient()
         self.auth = SoapAuth(self.client)
         self.config = SoapConfig()
+        # Separate login/session system from the api.soap4.me client above
+        # -- see SoapWebClient's docstring. Only used for movie playback.
+        self.web_client = SoapWebClient()
 
         self.auth.auth()
 
@@ -980,11 +1342,17 @@ class SoapApi(object):
     def main(self):
         KodiConfig.message_till_days()
 
+        # 'movies' / 'my_movies' aren't in localization.py yet; fall back to English.
+        movies_label = getattr(l, 'movies', 'Movies')
+        my_movies_label = getattr(l, 'my_movies', 'My Movies')
+
         return [
             MenuRow({'page': 'My', 'param': 'my'}, l.my_shows, is_folder=True),
             MenuRow({'page': 'All', 'param': 'my'}, l.all_shows, is_folder=True),
             MenuRow({'page': 'Continue', 'param': 'my'}, l.unfinished, is_folder=True),
             MenuRow({'page': 'AliveForMe', 'param': 'my'}, l.recommended, is_folder=True),
+            MenuRow({'page': 'Movies', 'param': 'my'}, my_movies_label, is_folder=True),
+            MenuRow({'page': 'Movies', 'param': 'all'}, movies_label, is_folder=True),
         ]
 
     def my_menu(self):
@@ -1085,6 +1453,24 @@ class SoapApi(object):
 
         return rows
 
+    def get_movies(self, type):
+        """type is 'all' or 'my' -> looked up as 'movie_all' / 'movie_my'."""
+        key = 'movie_' + (type or 'all')
+        # Movie rows use 'id', not 'sid'.
+        return [
+            SoapMovie(int(row['id']), row).menu()
+            for row in self.get_list(key)
+        ]
+
+    def get_movie(self, mid):
+        mid = int(mid)
+        data = self.client.request(self.MOVIE_DESCRIPTION_URL.format(mid), use_cache=True)
+
+        if not isinstance(data, dict) or not data.get('id'):
+            raise SoapException('Movie not found: {0}'.format(mid))
+
+        return SoapMovie(mid, data)
+
 
     def _get_video(self, sid, eid, ehash):
         myhash = (
@@ -1122,6 +1508,36 @@ class SoapApi(object):
         xbmc.executebuiltin('Container.Refresh')
         return isinstance(data, dict) and data.get('ok', 0) == 1
 
+    def mark_movie_watched(self, mid, watched=True):
+        # Goes through SoapWebClient: the endpoints live on the website, not
+        # api.soap4.me.
+        try:
+            self.web_client.set_movie_watched(mid, watched)
+        except Exception as e:
+            xbmc.log('SOAP4ME mark_movie_watched FAILED mid={0} watched={1}: {2}'.format(mid, watched, e))
+            return False
+
+        # The movie and its lists are cached for a few minutes; drop them
+        # before refreshing so the new watched state shows up. Not
+        # clean_all(): that also wipes the saved resume positions.
+        for url in (self.MOVIE_DESCRIPTION_URL.format(mid),
+                    self.LISTS_URL['movie_all'],
+                    self.LISTS_URL['movie_my']):
+            self.client.clean(url)
+        xbmc.executebuiltin('Container.Refresh')
+        return True
+
+    def like_movie(self, mid, liked=True):
+        # Goes through SoapWebClient: the endpoint lives on the website, not
+        # api.soap4.me.
+        try:
+            self.web_client.set_movie_liked(mid, liked=liked)
+        except Exception as e:
+            xbmc.log('SOAP4ME like_movie FAILED mid={0} liked={1}: {2}'.format(mid, liked, e))
+            return False
+        xbmc.executebuiltin('Container.Refresh')
+        return True
+
     def save_position(self, eid, position):
         params = {
             'eid': eid,
@@ -1130,6 +1546,20 @@ class SoapApi(object):
         data = self.client.request(self.SAVE_POSITION_URL.format(eid=eid), params)
         xbmc.executebuiltin('Container.Refresh')
         return isinstance(data, dict) and data.get('ok', 0) == 1
+
+    def save_movie_position(self, mid, position):
+        # Untested (see MOVIE_SAVE_POSITION_URL): the params may be wrong, or
+        # the id may belong in the URL. Failures are swallowed so a bad save
+        # never breaks playback; resume just won't persist.
+        try:
+            data = self.client.request(
+                self.MOVIE_SAVE_POSITION_URL.format(mid=mid),
+                {'id': mid, 'time': int(position)}
+            )
+            xbmc.executebuiltin('Container.Refresh')
+            return isinstance(data, dict) and data.get('ok', 0) == 1
+        except Exception:
+            return False
 
     def get_play(self, all_episodes, season, epnum, eid):
         ep_data, img = all_episodes.get_episode(season, epnum, eid)
@@ -1145,6 +1575,54 @@ class SoapApi(object):
             li,
             lambda : self.mark_watched('episode', {'sid': ep_data['sid'], 'season': season, 'episode': epnum}),
             lambda pos: self.save_position(ep_data['eid'], pos)
+        )
+        sv.play()
+
+        return True
+
+    def get_play_movie(self, mid):
+        mid = int(mid)
+        movie = self.get_movie(mid)
+
+        stream_url = movie.data.get('stream_url')
+        subtitles = []
+        start_from = movie.data.get('start_from') or 0
+
+        if not stream_url:
+            # No stream_url from the API: fall back to scraping the movie page.
+            scraped = self.web_client.get_movie_stream(mid)
+            stream_url = scraped['stream']
+            subtitles = scraped.get('subtitles') or []
+
+        img = movie.data.get('covers', {}).get('big')
+        li = xbmcgui.ListItem(movie.title())
+        li.setArt({'icon': str(img)})
+        li.setArt({'thumb': str(img)})
+
+        # Movies are HLS master playlists. Kodi's built-in ffmpeg demuxer
+        # probes every rendition up front, so one unreachable rendition
+        # aborts playback entirely. inputstream.adaptive only fetches the
+        # rendition it needs, so use it (it must be installed and enabled).
+        if '.m3u8' in stream_url:
+            li.setProperty('inputstream', 'inputstream.adaptive')
+            li.setProperty('inputstream.adaptive.manifest_type', 'hls')
+            li.setMimeType('application/vnd.apple.mpegurl')
+            li.setContentLookup(False)
+
+        if subtitles:
+            # Best-effort: unverified that Kodi can fetch these URLs as-is.
+            try:
+                li.setSubtitles(subtitles)
+            except Exception:
+                pass
+
+        sv = SoapVideo(
+            mid,
+            stream_url,
+            start_from,
+            li,
+            lambda: self.mark_movie_watched(mid),
+            lambda pos: self.save_movie_position(mid, pos)
         )
         sv.play()
 
@@ -1186,6 +1664,14 @@ class SoapApi(object):
             return self.get_last_episodes('all')
         elif parts.page == 'Continue':
             return self.get_continue_episodes()
+
+        elif parts.page == 'Movies':
+            return self.get_movies(parts.param)
+        elif parts.page == 'PlayMovie':
+            # No variant picker to fall back to, unlike Episodes/Play; return to the main menu.
+            if not self.get_play_movie(parts.sid):
+                parts.clear()
+                return self.main()
 
         elif parts.page == 'Serial':
             return self.get_serials(parts.sid)
@@ -1371,6 +1857,31 @@ if sys.argv[1] == 'mark_watched' or sys.argv[1] == 'mark_unwatched':
         message_ok(l.done)
     else:
         #message_error(l.error_msg.format(msg))
+        message_error(l.error)
+
+    exit(0)
+
+MOVIE_SCRIPT_ACTIONS = {
+    'mark_movie_watched': lambda api, mid: api.mark_movie_watched(mid, True),
+    'mark_movie_unwatched': lambda api, mid: api.mark_movie_watched(mid, False),
+    'movie_like': lambda api, mid: api.like_movie(mid, liked=True),
+    'movie_unlike': lambda api, mid: api.like_movie(mid, liked=False),
+}
+
+if sys.argv[1] in MOVIE_SCRIPT_ACTIONS:
+    api = SoapApi()
+
+    if not api.is_auth:
+        message_error(l.error_auth)
+
+    res = MOVIE_SCRIPT_ACTIONS[sys.argv[1]](api, to_int(sys.argv[2]))
+
+    api.client.clean_all()
+    xbmc.executebuiltin('Container.Refresh')
+
+    if res:
+        message_ok(l.done)
+    else:
         message_error(l.error)
 
     exit(0)
