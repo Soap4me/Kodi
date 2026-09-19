@@ -205,11 +205,11 @@ msgid "Remove from My shows"
 msgstr ""
 
 msgctxt "#32043"
-msgid "Mark as Not watched"
+msgid "Mark as unwatched (soap4.me)"
 msgstr ""
 
 msgctxt "#32044"
-msgid "Mark as Watched"
+msgid "Mark as watched (soap4.me)"
 msgstr ""
 
 msgctxt "#32101"

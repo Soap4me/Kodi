@@ -205,12 +205,12 @@ msgid "Remove from My shows"
 msgstr "Убрать из моих сериалов"
 
 msgctxt "#32043"
-msgid "Mark as Not watched"
-msgstr "Пометить как непросмотренный"
+msgid "Mark as unwatched (soap4.me)"
+msgstr "Пометить как непросмотренный (soap4.me)"
 
 msgctxt "#32044"
-msgid "Mark as Watched"
-msgstr "Пометить как просмотренный"
+msgid "Mark as watched (soap4.me)"
+msgstr "Пометить как просмотренный (soap4.me)"
 
 msgctxt "#32101"
 msgid "Play"
