@@ -656,6 +656,12 @@ class MenuRow(object):
 
     def item(self, parts):
         info = {}
+        # 'title' (not 'label') is the infoLabels/InfoTagVideo key for the
+        # video info tag's own title -- CVideoInfoTag.IsEmpty() checks only
+        # this field (plus file/path, which plugin items never set), so
+        # without it Kodi's "Information" dialog silently does nothing,
+        # no matter how much other info (plot, cast, rating...) is set.
+        info['title'] = self.title
         info['plot'] = self.description or ''
 
         vtype = 'video'
@@ -674,7 +680,34 @@ class MenuRow(object):
             meta = {k: v for k, v in self.meta.items() if k != 'label'}
             info.update(meta)
 
-        li.setInfo(type=vtype, infoLabels=info)
+        # Kodi v20+ (Nexus) deprecated setInfo() in favour of typed
+        # setters on InfoTagVideo. Use them when available to silence the
+        # deprecation warning; fall back to setInfo() on older builds.
+        try:
+            tag = li.getVideoInfoTag()
+            tag.setTitle(info['title'])
+            tag.setPlot(info.get('plot', ''))
+            if info.get('playcount'):
+                tag.setPlaycount(int(info['playcount']))
+            if info.get('Rating'):
+                tag.setRating(float(info['Rating']))
+            if info.get('Votes'):
+                tag.setVotes(int(info['Votes']))
+            if info.get('Year'):
+                tag.setYear(int(info['Year']))
+            if info.get('IMDBNumber'):
+                tag.setIMDBNumber(str(info['IMDBNumber']))
+            if info.get('Country'):
+                tag.setCountries([info['Country']])
+            if info.get('Duration'):
+                tag.setDuration(int(info['Duration']) * 60)
+            if info.get('Date'):
+                tag.setFirstAired(info['Date'])
+            if info.get('ChannelName'):
+                tag.setTvShowTitle(info['ChannelName'])
+        except AttributeError:
+            # getVideoInfoTag() not available -- old Kodi build, fall back.
+            li.setInfo(type=vtype, infoLabels=info)
 
         if self.context:
             li.addContextMenuItems(self.context)
