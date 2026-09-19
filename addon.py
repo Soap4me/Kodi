@@ -656,7 +656,6 @@ class MenuRow(object):
 
     def item(self, parts):
         info = {}
-        info['label'] = self.title
         info['plot'] = self.description or ''
 
         vtype = 'video'
@@ -669,7 +668,11 @@ class MenuRow(object):
             info["playcount"] = 10
 
         if self.meta and isinstance(self.meta, dict):
-            info.update(self.meta)
+            # 'label' is set on the ListItem directly above and was never
+            # a valid infoLabels key -- strip it here so Kodi v20+ doesn't
+            # log "Unknown Video Info Key label" as an error.
+            meta = {k: v for k, v in self.meta.items() if k != 'label'}
+            info.update(meta)
 
         li.setInfo(type=vtype, infoLabels=info)
 
