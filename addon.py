@@ -481,7 +481,7 @@ class KodiConfig(object):
             __addon__.setSetting('_message_till_days', str(int(time.time()) + 43200))
             till = to_int(__addon__.getSetting('_token_till'))
             if till != 0:
-                message_ok(l.days_left.format(int(till - time.time()) / 86400))
+                message_ok(l.days_left.format(int(till - time.time()) // 86400))
 
     @classmethod
     def kodi_get_auth(cls):
