@@ -402,7 +402,7 @@ class SoapHttpClient(SoapCookies):
         post_data = self._post_data(params)
         if params is not None:
             req.add_header('Content-Type', 'application/x-www-form-urlencoded')
-        
+
         response = urllib.request.urlopen(req, post_data)
 
 
@@ -662,8 +662,8 @@ class MenuRow(object):
         vtype = 'video'
 
         li = xbmcgui.ListItem(label=self.title)
-        li.setArt({'icon':str(self.img)})
-        li.setArt({'thumb':str(self.img)})
+        li.setArt({'icon': str(self.img)})
+        li.setArt({'thumb': str(self.img)})
 
         if self.is_watched:
             info["playcount"] = 10
@@ -675,7 +675,6 @@ class MenuRow(object):
 
         if self.context:
             li.addContextMenuItems(self.context)
-
 
         return h, parts.uri(self.link), li, bool(self.is_folder)
 
@@ -724,7 +723,7 @@ class SoapSerial(object):
 
     def get_context(self):
         param = 'A{sid}'.format(sid=self.sid)
-                
+
         return [
             (l.add_to_my_shows, 'RunScript(plugin.video.soap4.me, watch, {0})'.format(self.sid))
             if self.data.get('watching', 0) == 0 else
@@ -832,7 +831,7 @@ class SoapEpisode(object):
             season=self.season,
             episode=self.epnum
         )
-        
+
         return [
             (l.mark_as_unwatched, 'RunScript(plugin.video.soap4.me, mark_unwatched, {0})'.format(param))
             if self.is_watched() else
@@ -885,14 +884,14 @@ class SoapEpisodes(object):
             )
             for season in self.seasons
         ]
-    
+
     def get_context(self, season):
         param = 'S{sid}|{season}'.format(
             sid=self.sid,
             season=season
         )
         is_watched=all(ep.is_watched() for ep in list(self.episodes[season].values()))
-        
+
         return [
             (l.mark_as_unwatched, 'RunScript(plugin.video.soap4.me, mark_unwatched, {0})'.format(param))
             if is_watched else
@@ -1304,7 +1303,7 @@ class SoapApi(object):
     # Path taken from the Android app's strings, mirroring SAVE_POSITION_URL
     # for episodes. Param names are a guess and it's untested.
     MOVIE_SAVE_POSITION_URL = '/movies/savets/{mid}/'
-    
+
 
     WATCHING_URL = {
         'serial': {
@@ -1319,7 +1318,7 @@ class SoapApi(object):
             'watch': '/episodes/watch/{sid}/{season}/{episode}/',
             'unwatch': '/episodes/unwatch/{sid}/{season}/{episode}/'
         }
-        
+
     }
 
     class EMPTY_RESULT(object):
@@ -1384,7 +1383,7 @@ class SoapApi(object):
             url = self.LISTS_URL[sid]
         else:
             url = self.EPISODES_URL.format(sid)
-            
+
         def _request():
             try:
                 data = self.client.request(url, use_cache=use_cache)
@@ -1408,7 +1407,7 @@ class SoapApi(object):
             if not data:
                 self.client.clean(url)
                 raise Exception('Error with request')
-        
+
         if data is self.EMPTY_RESULT:
             return []
 
@@ -1417,7 +1416,7 @@ class SoapApi(object):
     def get_serials(self, type, filters=None):
         if filters is None:
             filters = {}
-            
+
         result = [
             SoapSerial(int(row['sid']), row).menu()
             for row in self.get_list(type)
@@ -1830,14 +1829,14 @@ if sys.argv[1] == 'mark_watched' or sys.argv[1] == 'mark_unwatched':
         message_error(l.error_auth)
 
     param = sys.argv[2]
-    
+
     def parse(param):
         return dict(list(zip(('sid', 'season', 'episode'), list(map(to_int, param.split('|'))))))
 
     type = 'None'
     params = parse(param[1:])
-    
-    
+
+
     if param.startswith('A'):
         type = 'serial'
     elif param.startswith('S'):
@@ -1846,10 +1845,10 @@ if sys.argv[1] == 'mark_watched' or sys.argv[1] == 'mark_unwatched':
         type = 'episode'
 
 
-    
+
     mark_fun = api.mark_watched if sys.argv[1] == 'mark_watched' else api.mark_unwatched
     res = mark_fun(type, params)
-    
+
     api.client.clean_all()
     xbmc.executebuiltin('Container.Refresh')
 
