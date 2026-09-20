@@ -698,10 +698,20 @@ class MenuRow(object):
             tag.setPlot(info.get('plot', ''))
             if info.get('playcount'):
                 tag.setPlaycount(int(info['playcount']))
-            if info.get('Rating'):
-                tag.setRating(float(info['Rating']))
-            if info.get('Votes'):
-                tag.setVotes(int(info['Votes']))
+            if info.get('Ratings'):
+                for rating_type, value, votes, is_default in info['Ratings']:
+                    tag.setRating(float(value), int(votes), rating_type, is_default)
+            else:
+                if info.get('Rating'):
+                    tag.setRating(float(info['Rating']))
+                if info.get('Votes'):
+                    tag.setVotes(int(info['Votes']))
+            if info.get('UserRating'):
+                tag.setUserRating(int(info['UserRating']))
+            if info.get('Video'):
+                # Lets skins show the resolution flag (1080p, 4K...).
+                width, height = info['Video']
+                tag.addVideoStream(xbmc.VideoStreamDetail(width=width, height=height))
             if info.get('Year'):
                 tag.setYear(int(info['Year']))
             if info.get('IMDBNumber'):
@@ -724,7 +734,9 @@ class MenuRow(object):
                 tag.setMediaType(info['Mediatype'])
         except AttributeError:
             # getVideoInfoTag() not available -- old Kodi build, fall back.
-            li.setInfo(type=vtype, infoLabels=info)
+            li.setInfo(type=vtype, infoLabels={
+                k: v for k, v in info.items() if k not in ('Ratings', 'Video')
+            })
 
         if self.context:
             li.addContextMenuItems(self.context)
@@ -1010,6 +1022,42 @@ class SoapMovie(object):
     # Cast members shown per movie.
     MAX_ACTORS = 5
 
+    # The qualities soap4.me offers, lowest first, and the picture size Kodi
+    # is told about for the best one available.
+    QUALITY_SIZES = (
+        ('SD', (720, 480)),
+        ('HD', (1280, 720)),
+        ('FHD', (1920, 1080)),
+        ('UHD', (3840, 2160)),
+    )
+
+    @staticmethod
+    def _number(value, cast=float):
+        """
+        Ratings and votes are numbers in the main lists but formatted strings
+        ("138,429", or missing) in others, such as the genre and country lists.
+        Returns 0 for anything that isn't a number.
+        """
+        try:
+            return cast(str(value).replace(',', '').strip())
+        except ValueError:
+            return cast(0)
+
+    def _ratings(self):
+        """(type, rating, votes, is_default) for each rating the movie has."""
+        sources = (
+            ('imdb', 'imdb_rating', 'imdb_votes'),
+            ('kinopoisk', 'kinopoisk_rating', 'kinopoisk_votes'),
+            ('soap4me', 'soap_rating', 'soap_votes'),
+        )
+        ratings = []
+        for rating_type, rating_key, votes_key in sources:
+            value = self._number(self.data.get(rating_key))
+            votes = self._number(self.data.get(votes_key), int)
+            if value > 0:
+                ratings.append((rating_type, value, votes, not ratings))
+        return ratings
+
     @staticmethod
     def _names(items):
         """Names from API {'name': ...} dicts, or from plain strings (cached)."""
@@ -1071,13 +1119,25 @@ class SoapMovie(object):
 
         meta = {
             'IMDBNumber': self.data.get('imdb_id'),
-            'Votes': self.data.get('imdb_votes'),
-            'Rating': self.data.get('imdb_rating'),
+            'Votes': self._number(self.data.get('imdb_votes'), int),
+            'Rating': self._number(self.data.get('imdb_rating')),
             'Year': year,
             # Comma-separated ("US, ZA, NZ"); the key is 'countries', not 'country'.
             'Country': self.data.get('countries'),
             'Mediatype': 'movie',
         }
+
+        ratings = self._ratings()
+        if ratings:
+            meta['Ratings'] = ratings
+        user_rating = self._number(self.data.get('user_rating'), int)
+        if user_rating > 0:
+            meta['UserRating'] = user_rating
+
+        qualities = self.data.get('qualities') or []
+        best = [size for name, size in self.QUALITY_SIZES if name in qualities]
+        if best:
+            meta['Video'] = best[-1]
 
         # Only present once the details were fetched (see
         # SoapApi._add_movie_details); the /movies/ list rows don't have them.
@@ -1099,10 +1159,10 @@ class SoapMovie(object):
             ts = dt.datetime.fromtimestamp(float(self.data.get('updated', 0)))
             meta['Date'] = ts.strftime('%d-%m-%Y')
 
-        # The Russian title, year and runtime always lead; the synopsis
-        # follows when the details are available.
+        # The Russian title, year, runtime (and 4K, as the exception) always
+        # lead; the synopsis follows when the details are available.
         description = ' \u2022 '.join(
-            str(p) for p in (title_ru, year, runtime_raw) if p
+            str(p) for p in (title_ru, year, runtime_raw, '4K' if 'UHD' in qualities else None) if p
         )
         synopsis = self._description()
         if synopsis:
