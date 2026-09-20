@@ -169,8 +169,28 @@ msgid "Recommended"
 msgstr "Что еще посмотреть?"
 
 msgctxt "#32005"
-msgid "Movie franchises"
-msgstr "Франшизы фильмов"
+msgid "Franchises"
+msgstr "Франшизы"
+
+msgctxt "#32006"
+msgid "Movies"
+msgstr "Фильмы"
+
+msgctxt "#32007"
+msgid "My movies"
+msgstr "Мои фильмы"
+
+msgctxt "#32008"
+msgid "All movies"
+msgstr "Все фильмы"
+
+msgctxt "#32009"
+msgid "Popular movies"
+msgstr "Популярные фильмы"
+
+msgctxt "#32010"
+msgid "New movies"
+msgstr "Новые фильмы"
 
 msgctxt "#32011"
 msgid "Last 20 episodes"
@@ -179,6 +199,10 @@ msgstr "Последние 20 эпизодов"
 msgctxt "#32012"
 msgid "Unwatched episodes"
 msgstr "C непросмотренными эпизодами"
+
+msgctxt "#32013"
+msgid "My unwatched movies"
+msgstr "Мои непросмотренные фильмы"
 
 msgctxt "#32021"
 msgid "Original"
@@ -219,6 +243,14 @@ msgstr "Пометить как непросмотренный (soap4.me)"
 msgctxt "#32044"
 msgid "Mark as watched (soap4.me)"
 msgstr "Пометить как просмотренный (soap4.me)"
+
+msgctxt "#32045"
+msgid "Add to My Movies"
+msgstr "Добавить в мои фильмы"
+
+msgctxt "#32046"
+msgid "Remove from My Movies"
+msgstr "Убрать из моих фильмов"
 
 msgctxt "#32101"
 msgid "Play"

@@ -1033,16 +1033,11 @@ class SoapMovie(object):
     def get_context(self):
         param = str(self.mid)
 
-        # The movie strings aren't in localization.py yet, so fall back to
-        # English (same as the Movies / My Movies menu labels).
-        add_label = getattr(l, 'add_to_my_movies', 'Add to My Movies')
-        remove_label = getattr(l, 'remove_from_my_movies', 'Remove from My Movies')
-
         return [
             # "My Movies" membership follows 'liked', not 'watched'.
-            (remove_label, 'RunScript(plugin.video.soap4.me, movie_unlike, {0})'.format(param))
+            (l.remove_from_my_movies, 'RunScript(plugin.video.soap4.me, movie_unlike, {0})'.format(param))
             if self.is_liked() else
-            (add_label, 'RunScript(plugin.video.soap4.me, movie_like, {0})'.format(param))
+            (l.add_to_my_movies, 'RunScript(plugin.video.soap4.me, movie_like, {0})'.format(param))
         ] + [
             (l.mark_as_unwatched, 'RunScript(plugin.video.soap4.me, mark_movie_unwatched, {0})'.format(param))
             if self.is_watched() else
@@ -1370,6 +1365,7 @@ class SoapApi(object):
         # Movies
         'movie_all': '/movies/',
         'movie_my': '/movies/my/',
+        'movie_popular': '/movies/popular/',
         'movie_franchises': '/movies/franchise/',
     }
 
@@ -1437,17 +1433,21 @@ class SoapApi(object):
     def main(self):
         KodiConfig.message_till_days()
 
-        # 'movies' / 'my_movies' aren't in localization.py yet; fall back to English.
-        movies_label = getattr(l, 'movies', 'Movies')
-        my_movies_label = getattr(l, 'my_movies', 'My Movies')
-
         return [
             MenuRow({'page': 'My', 'param': 'my'}, l.my_shows, is_folder=True),
             MenuRow({'page': 'All', 'param': 'my'}, l.all_shows, is_folder=True),
             MenuRow({'page': 'Continue', 'param': 'my'}, l.unfinished, is_folder=True),
             MenuRow({'page': 'AliveForMe', 'param': 'my'}, l.recommended, is_folder=True),
-            MenuRow({'page': 'Movies', 'param': 'my'}, my_movies_label, is_folder=True),
-            MenuRow({'page': 'Movies', 'param': 'all'}, movies_label, is_folder=True),
+            MenuRow({'page': 'MoviesMenu'}, l.movies, is_folder=True),
+        ]
+
+    def movies_menu(self):
+        return [
+            MenuRow({'page': 'Movies', 'param': 'my'}, l.my_movies, is_folder=True),
+            MenuRow({'page': 'Movies', 'param': 'unwatched'}, l.my_unwatched_movies, is_folder=True),
+            MenuRow({'page': 'Movies', 'param': 'popular'}, l.popular_movies, is_folder=True),
+            MenuRow({'page': 'Movies', 'param': 'new'}, l.new_movies, is_folder=True),
+            MenuRow({'page': 'Movies', 'param': 'all'}, l.all_movies, is_folder=True),
             MenuRow({'page': 'MovieFranchises'}, l.movie_franchises, is_folder=True),
         ]
 
@@ -1625,9 +1625,25 @@ class SoapApi(object):
         # Movie rows use 'id', not 'sid'.
         return [SoapMovie(int(row['id']), row).menu() for row in rows]
 
+    # "New" has no endpoint of its own. The website lists the most recently
+    # added movies, and ids follow that order; they only differ where the
+    # cut-off falls inside a batch of movies that were added together.
+    MOVIES_NEW_COUNT = 32
+
     def get_movies(self, type):
-        """type is 'all' or 'my' -> looked up as 'movie_all' / 'movie_my'."""
-        return self._movie_menu_rows(self.get_list('movie_' + (type or 'all')))
+        """type: 'all', 'my', 'popular' (API lists), 'new' or 'unwatched' (derived)."""
+        type = type or 'all'
+
+        if type == 'new':
+            rows = sorted(self.get_list('movie_all'), key=lambda row: int(row['id']), reverse=True)
+            rows = rows[:self.MOVIES_NEW_COUNT]
+        elif type == 'unwatched':
+            # My movies that haven't been watched yet: a watchlist.
+            rows = [row for row in self.get_list('movie_my') if not row.get('watched')]
+        else:
+            rows = self.get_list('movie_' + type)
+
+        return self._movie_menu_rows(rows)
 
     def get_movie_franchises(self):
         return [
@@ -1849,6 +1865,8 @@ class SoapApi(object):
         elif parts.page == 'Continue':
             return self.get_continue_episodes()
 
+        elif parts.page == 'MoviesMenu':
+            return self.movies_menu()
         elif parts.page == 'Movies':
             return self.get_movies(parts.param)
         elif parts.page == 'MovieFranchises':

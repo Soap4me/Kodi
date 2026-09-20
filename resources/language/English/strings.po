@@ -169,7 +169,27 @@ msgid "Recommended"
 msgstr ""
 
 msgctxt "#32005"
-msgid "Movie franchises"
+msgid "Franchises"
+msgstr ""
+
+msgctxt "#32006"
+msgid "Movies"
+msgstr ""
+
+msgctxt "#32007"
+msgid "My movies"
+msgstr ""
+
+msgctxt "#32008"
+msgid "All movies"
+msgstr ""
+
+msgctxt "#32009"
+msgid "Popular movies"
+msgstr ""
+
+msgctxt "#32010"
+msgid "New movies"
 msgstr ""
 
 msgctxt "#32011"
@@ -178,6 +198,10 @@ msgstr ""
 
 msgctxt "#32012"
 msgid "Unwatched episodes"
+msgstr ""
+
+msgctxt "#32013"
+msgid "My unwatched movies"
 msgstr ""
 
 msgctxt "#32021"
@@ -218,6 +242,14 @@ msgstr ""
 
 msgctxt "#32044"
 msgid "Mark as watched (soap4.me)"
+msgstr ""
+
+msgctxt "#32045"
+msgid "Add to My Movies"
+msgstr ""
+
+msgctxt "#32046"
+msgid "Remove from My Movies"
 msgstr ""
 
 msgctxt "#32101"
