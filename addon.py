@@ -8,12 +8,6 @@ import datetime as dt
 import re
 import resources.lib.localization as l
 
-try:
-    import ssl
-    ssl._create_default_https_context = ssl._create_unverified_context
-except:
-    pass
-
 __version__ = '1.2.0'
 __settings__ = xbmcaddon.Addon(id='plugin.video.soap4.me')
 
