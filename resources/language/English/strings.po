@@ -164,6 +164,10 @@ msgctxt "#32004"
 msgid "Recommended"
 msgstr ""
 
+msgctxt "#32005"
+msgid "Movie franchises"
+msgstr ""
+
 msgctxt "#32011"
 msgid "Last 20 episodes"
 msgstr ""

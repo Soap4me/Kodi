@@ -1323,6 +1323,7 @@ class SoapApi(object):
         # Movies
         'movie_all': '/movies/',
         'movie_my': '/movies/my/',
+        'movie_franchises': '/movies/franchise/',
     }
 
     PLAY_EPISODES_URL = '/play/episode/{eid}/'
@@ -1332,6 +1333,9 @@ class SoapApi(object):
     # playlist) and 'start_from' (resume position) in one response --
     # unlike episodes, no separate play/hash-exchange step.
     MOVIE_DESCRIPTION_URL = '/movies/description/{0}/'
+
+    # The movies of one franchise, by the 'url_name' from the franchise list.
+    MOVIE_FRANCHISE_URL = '/movies/franchise/{0}/'
 
     MARKER_URL = {
         'watch': '/soap/watch/{sid}/',
@@ -1393,6 +1397,7 @@ class SoapApi(object):
             MenuRow({'page': 'AliveForMe', 'param': 'my'}, l.recommended, is_folder=True),
             MenuRow({'page': 'Movies', 'param': 'my'}, my_movies_label, is_folder=True),
             MenuRow({'page': 'Movies', 'param': 'all'}, movies_label, is_folder=True),
+            MenuRow({'page': 'MovieFranchises'}, l.movie_franchises, is_folder=True),
         ]
 
     def my_menu(self):
@@ -1419,7 +1424,7 @@ class SoapApi(object):
                     })
         ]
 
-    def get_list(self, sid, use_cache=True):
+    def get_list(self, sid, use_cache=True, url_template=None):
         # NOTE: this used to conflate "the API returned a real error" with
         # "the API returned a legitimately empty list" (both fell through
         # Python's `if not data:` truthiness check, since `[]` is falsy
@@ -1428,7 +1433,9 @@ class SoapApi(object):
         # pointlessly re-auth, get [] again, and raise. SOFT_ERROR below
         # is a real error signal; EMPTY_RESULT/a plain empty list/dict is
         # valid data and returned as-is, no retry.
-        if sid in self.LISTS_URL:
+        if url_template is not None:
+            url = url_template.format(sid)
+        elif sid in self.LISTS_URL:
             url = self.LISTS_URL[sid]
         else:
             url = self.EPISODES_URL.format(sid)
@@ -1508,6 +1515,24 @@ class SoapApi(object):
         return [
             SoapMovie(int(row['id']), row).menu()
             for row in self.get_list(key)
+        ]
+
+    def get_movie_franchises(self):
+        return [
+            MenuRow(
+                {'page': 'MovieFranchise', 'sid': row['url_name']},
+                '{0} ({1})'.format(row['name'], row['count']),
+                img=row.get('covers', {}).get('big'),
+                is_folder=True
+            )
+            for row in self.get_list('movie_franchises')
+        ]
+
+    def get_movie_franchise(self, url_name):
+        return [
+            SoapMovie(int(row['id']), row).menu()
+            for row in self.get_list(urllib.parse.quote(url_name, safe=''),
+                                     url_template=self.MOVIE_FRANCHISE_URL)
         ]
 
     def get_movie(self, mid):
@@ -1715,6 +1740,10 @@ class SoapApi(object):
 
         elif parts.page == 'Movies':
             return self.get_movies(parts.param)
+        elif parts.page == 'MovieFranchises':
+            return self.get_movie_franchises()
+        elif parts.page == 'MovieFranchise':
+            return self.get_movie_franchise(parts.sid)
         elif parts.page == 'PlayMovie':
             # No variant picker to fall back to, unlike Episodes/Play; return to the main menu.
             if not self.get_play_movie(parts.sid):

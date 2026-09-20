@@ -7,6 +7,7 @@ my_shows = loc_str(32001)
 all_shows = loc_str(32002)
 unfinished = loc_str(32003)
 recommended = loc_str(32004)
+movie_franchises = loc_str(32005)
 
 last_20 = loc_str(32011)
 with_unwatched = loc_str(32012)
