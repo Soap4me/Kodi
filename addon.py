@@ -248,7 +248,10 @@ class SoapVideo(object):
 
             subtitle = str(__addon__.getSetting('subtitle'))
             subtitles = player.getAvailableSubtitleStreams()
-            if len(subtitles) > 1 and subtitle != '0':
+            if subtitle == '3':
+                # xbmc.Player has no disableSubtitles(); hide them instead.
+                player.showSubtitles(False)
+            elif len(subtitles) > 1 and subtitle != '0':
                 result = dict()
                 for i, lang in enumerate(subtitles):
                     if 'rus' in lang.lower():
@@ -260,8 +263,6 @@ class SoapVideo(object):
                     player.setSubtitleStream(result['rus'])
                 if subtitle == '2' and 'eng' in result:
                     player.setSubtitleStream(result['eng'])
-                if subtitle == 3:
-                    player.disableSubtitles()
 
         def stop_cb(pos):
             self.set_pos(pos)
