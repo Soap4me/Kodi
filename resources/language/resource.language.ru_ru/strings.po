@@ -204,6 +204,10 @@ msgctxt "#32013"
 msgid "My unwatched movies"
 msgstr "Мои непросмотренные фильмы"
 
+msgctxt "#32014"
+msgid "Genres"
+msgstr "Жанры"
+
 msgctxt "#32021"
 msgid "Original"
 msgstr "Оригинал"

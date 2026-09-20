@@ -17,6 +17,7 @@ new_movies = loc_str(32010)
 last_20 = loc_str(32011)
 with_unwatched = loc_str(32012)
 my_unwatched_movies = loc_str(32013)
+movie_genres = loc_str(32014)
 
 original = loc_str(32021)
 original_sub = loc_str(32022)

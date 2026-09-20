@@ -1435,6 +1435,10 @@ class SoapApi(object):
     # The movies of one franchise, by the 'url_name' from the franchise list.
     MOVIE_FRANCHISE_URL = '/movies/franchise/{0}/'
 
+    # The movies of one genre. The "interest" endpoint covers both the main
+    # genres and the subcategories under them.
+    MOVIE_GENRE_URL = '/movies/interest/{0}/'
+
     MARKER_URL = {
         'watch': '/soap/watch/{sid}/',
         'unwatch': '/soap/unwatch/{sid}/',
@@ -1503,6 +1507,7 @@ class SoapApi(object):
             MenuRow({'page': 'Movies', 'param': 'popular'}, l.popular_movies, is_folder=True),
             MenuRow({'page': 'Movies', 'param': 'new'}, l.new_movies, is_folder=True),
             MenuRow({'page': 'Movies', 'param': 'all'}, l.all_movies, is_folder=True),
+            MenuRow({'page': 'MovieGenres'}, l.movie_genres, is_folder=True),
             MenuRow({'page': 'MovieFranchises'}, l.movie_franchises, is_folder=True),
         ]
 
@@ -1717,6 +1722,30 @@ class SoapApi(object):
                           url_template=self.MOVIE_FRANCHISE_URL)
         )
 
+    def get_movie_genres(self):
+        """
+        There is no endpoint listing the genres, but every movie in the full
+        list names its own, so collect them from there, most movies first.
+        """
+        names = {}
+        counts = defaultdict(int)
+        for row in self.get_list('movie_all'):
+            for interest in row.get('interests') or []:
+                if isinstance(interest, dict) and interest.get('url_name'):
+                    names[interest['url_name']] = html.unescape(interest['name'])
+                    counts[interest['url_name']] += 1
+
+        return [
+            MenuRow({'page': 'MovieGenre', 'sid': url_name}, names[url_name], is_folder=True)
+            for url_name in sorted(counts, key=lambda u: (-counts[u], names[u]))
+        ]
+
+    def get_movie_genre(self, url_name):
+        return self._movie_menu_rows(
+            self.get_list(urllib.parse.quote(url_name, safe=''),
+                          url_template=self.MOVIE_GENRE_URL)
+        )
+
     def get_movie(self, mid):
         mid = int(mid)
         data = self.client.request(self.MOVIE_DESCRIPTION_URL.format(mid), use_cache=True)
@@ -1924,6 +1953,10 @@ class SoapApi(object):
             return self.movies_menu()
         elif parts.page == 'Movies':
             return self.get_movies(parts.param)
+        elif parts.page == 'MovieGenres':
+            return self.get_movie_genres()
+        elif parts.page == 'MovieGenre':
+            return self.get_movie_genre(parts.sid)
         elif parts.page == 'MovieFranchises':
             return self.get_movie_franchises()
         elif parts.page == 'MovieFranchise':
@@ -2061,7 +2094,7 @@ def addon_main():
     if rows is not None:
         # Movie lists get the 'movies' content type so skins show the cast,
         # director and genres in their info views.
-        content = 'movies' if parts.page in ('Movies', 'MovieFranchise') else 'files'
+        content = 'movies' if parts.page in ('Movies', 'MovieFranchise', 'MovieGenre') else 'files'
         kodi_draw_list(parts, rows, content)
 
 if sys.argv[1] == 'clearcache':
