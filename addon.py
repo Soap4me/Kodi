@@ -176,6 +176,9 @@ class SoapPlayer(xbmc.Player):
 
 class SoapVideo(object):
     def __init__(self, eid, url, start_from, li, cb_watched, cb_save_pos):
+        # Only used to key the local resume position, so ids of different
+        # kinds must not collide: episodes pass their bare id, movies pass
+        # 'movie_<id>'.
         self.eid = eid
         self.li = li
         self.url = url
@@ -1662,7 +1665,7 @@ class SoapApi(object):
                 pass
 
         sv = SoapVideo(
-            mid,
+            'movie_{0}'.format(mid),
             stream_url,
             start_from,
             li,
