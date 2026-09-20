@@ -8,7 +8,7 @@ import datetime as dt
 import re
 import resources.lib.localization as l
 
-__version__ = '1.2.0'
+__version__ = '1.3.0'
 __settings__ = xbmcaddon.Addon(id='plugin.video.soap4.me')
 
 DEBUG = False
