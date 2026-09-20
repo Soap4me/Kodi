@@ -148,6 +148,10 @@ msgctxt "#30133"
 msgid "Clear cache"
 msgstr ""
 
+msgctxt "#30134"
+msgid "Show cast, director and genres in movie lists (slower)"
+msgstr ""
+
 msgctxt "#32001"
 msgid "My shows"
 msgstr ""

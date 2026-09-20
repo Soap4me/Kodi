@@ -35,8 +35,11 @@ from collections import defaultdict
 import http.cookiejar
 import gzip
 import io
+import html
 import shutil
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 
 __addon__ = xbmcaddon.Addon(id = 'plugin.video.soap4.me')
 
@@ -329,6 +332,7 @@ class SoapCookies(object):
     def __init__(self):
         self.CJ = http.cookiejar.CookieJar()
         self._cookies = None
+        self._cookie_lock = threading.Lock()  # requests may run in parallel
         self.path = soappath
 
     def _cookies_init(self):
@@ -351,13 +355,14 @@ class SoapCookies(object):
             return
 
         cookie_send = {}
-        for cookie_fname in os.listdir(self.cookie_path):
-            cookie_file = os.path.join(self.cookie_path, cookie_fname)
-            if os.path.isfile(cookie_file):
-                cf = open(cookie_file, 'r')
-                cookie_send[os.path.basename(cookie_file)] = cf.read()
-                cf.close()
-                # else: print '[%s]: NOT os.path.isfile(cookie_file=%s)' % (addon_id, cookie_file)
+        with self._cookie_lock:
+            for cookie_fname in os.listdir(self.cookie_path):
+                cookie_file = os.path.join(self.cookie_path, cookie_fname)
+                if os.path.isfile(cookie_file):
+                    cf = open(cookie_file, 'r')
+                    cookie_send[os.path.basename(cookie_file)] = cf.read()
+                    cf.close()
+                    # else: print '[%s]: NOT os.path.isfile(cookie_file=%s)' % (addon_id, cookie_file)
 
         cookie_string = urllib.parse.urlencode(cookie_send).replace('&', '; ')
         req.add_header('Cookie', cookie_string)
@@ -366,11 +371,12 @@ class SoapCookies(object):
         if self.CJ is None:
             return
 
-        for Cook in self.CJ:
-            cookie_file = os.path.join(self.cookie_path, Cook.name)
-            cf = open(cookie_file, 'w')
-            cf.write(Cook.value)
-            cf.close()
+        with self._cookie_lock:
+            for Cook in self.CJ:
+                cookie_file = os.path.join(self.cookie_path, Cook.name)
+                cf = open(cookie_file, 'w')
+                cf.write(Cook.value)
+                cf.close()
 
 
 class SoapHttpClient(SoapCookies):
@@ -511,6 +517,7 @@ class SoapConfig(object):
         self.reverse = to_int(__addon__.getSetting('sorting')) == 1 # 0 down, 1 up
         self.list_unwatched_season = __addon__.getSetting('list_unwatched_season') == 'true'
         self.hide_watched_finished = __addon__.getSetting('hide_watched_finished') == 'true'
+        self.movie_details = __addon__.getSetting('movie_details') == 'true'
 
     def _choice_quality(self, files):
         qualities = set([to_int(f['quality']) for f in files])
@@ -707,6 +714,14 @@ class MenuRow(object):
                 tag.setFirstAired(info['Date'])
             if info.get('ChannelName'):
                 tag.setTvShowTitle(info['ChannelName'])
+            if info.get('Director'):
+                tag.setDirectors(list(info['Director']))
+            if info.get('Genre'):
+                tag.setGenres(list(info['Genre']))
+            if info.get('Cast'):
+                tag.setCast([xbmc.Actor(name, order=i) for i, name in enumerate(info['Cast'])])
+            if info.get('Mediatype'):
+                tag.setMediaType(info['Mediatype'])
         except AttributeError:
             # getVideoInfoTag() not available -- old Kodi build, fall back.
             li.setInfo(type=vtype, infoLabels=info)
@@ -992,6 +1007,26 @@ class SoapMovie(object):
         raw = self.data.get('title') or self.data.get('title_original') or ''
         return raw.replace('&#039;', "'").replace("&amp;", "&").replace('&quot;', '"')
 
+    # Cast members shown per movie.
+    MAX_ACTORS = 5
+
+    @staticmethod
+    def _names(items):
+        """Names from API {'name': ...} dicts, or from plain strings (cached)."""
+        return [html.unescape(i['name'] if isinstance(i, dict) else i) for i in items or [] if i]
+
+    def _description(self):
+        # The Kodi UI language picks the synopsis language, falling back to
+        # the other one when it's missing.
+        en = self.data.get('description')
+        ru = self.data.get('description_ru')
+        try:
+            prefer_ru = xbmc.getLanguage(xbmc.ISO_639_1) == 'ru'
+        except Exception:
+            prefer_ru = False
+        description = (ru or en) if prefer_ru else (en or ru)
+        return html.unescape(description) if description else description
+
     def is_liked(self):
         return bool(self.data.get('liked'))
 
@@ -1046,7 +1081,20 @@ class SoapMovie(object):
             'Year': year,
             # Comma-separated ("US, ZA, NZ"); the key is 'countries', not 'country'.
             'Country': self.data.get('countries'),
+            'Mediatype': 'movie',
         }
+
+        # Only present once the details were fetched (see
+        # SoapApi._add_movie_details); the /movies/ list rows don't have them.
+        directors = self._names(self.data.get('directors'))
+        if directors:
+            meta['Director'] = directors
+        genres = self._names(self.data.get('genres'))
+        if genres:
+            meta['Genre'] = genres
+        actors = self._names(self.data.get('actors'))[:self.MAX_ACTORS]
+        if actors:
+            meta['Cast'] = actors
 
         duration = self._parse_runtime_minutes(runtime_raw)
         if duration:
@@ -1056,15 +1104,14 @@ class SoapMovie(object):
             ts = dt.datetime.fromtimestamp(float(self.data.get('updated', 0)))
             meta['Date'] = ts.strftime('%d-%m-%Y')
 
-        # The /movies/ list has no synopsis (only the detail call does) and
-        # fetching it per row isn't worth an API call each, so fall back to a
-        # short composed line. A SoapMovie built from detail data uses the
-        # real synopsis.
-        description = self.data.get('description')
-        if not description:
-            description = ' \u2022 '.join(
-                str(p) for p in (title_ru, year, runtime_raw) if p
-            )
+        # The Russian title, year and runtime always lead; the synopsis
+        # follows when the details are available.
+        description = ' \u2022 '.join(
+            str(p) for p in (title_ru, year, runtime_raw) if p
+        )
+        synopsis = self._description()
+        if synopsis:
+            description = '{0}\n\n{1}'.format(description, synopsis)
 
         return MenuRow(
             {'page': 'PlayMovie', 'sid': str(self.mid)},
@@ -1376,6 +1423,10 @@ class SoapApi(object):
         # Separate login/session system from the api.soap4.me client above
         # -- see SoapWebClient's docstring. Only used for movie playback.
         self.web_client = SoapWebClient()
+        # Separate from the client's cache: it's cleared with clean_all() and
+        # this one should outlive that (see _add_movie_details).
+        self.movie_details_cache = SoapCache(os.path.join(soappath, 'movie_details'),
+                                             self.MOVIE_DETAILS_CACHE_MINUTES)
 
         self.auth.auth()
 
@@ -1508,14 +1559,75 @@ class SoapApi(object):
 
         return rows
 
+    # The list rows have no cast, director, genres or synopsis; only the
+    # per-movie detail call does. So lists get them from a long-lived cache,
+    # filled by a bounded number of parallel detail requests per listing --
+    # a long list (all movies) fills in gradually as it's browsed.
+    MOVIE_DETAILS_CACHE_MINUTES = 7 * 24 * 60
+    MOVIE_DETAILS_FETCH_LIMIT = 40
+    MOVIE_DETAILS_WORKERS = 8
+
+    def _cached_movie_details(self, mid):
+        text = self.movie_details_cache.get('movie_{0}'.format(mid))
+        if not text:
+            return None
+        try:
+            return json.loads(text)
+        except ValueError:
+            return None
+
+    def _fetch_movie_details(self, mid):
+        """Returns just the fields lists need, or None if the call failed."""
+        try:
+            data = self.client.request(self.MOVIE_DESCRIPTION_URL.format(mid))
+        except Exception as e:
+            xbmc.log('SOAP4ME movie details failed mid={0}: {1}'.format(mid, e))
+            return None
+
+        if not isinstance(data, dict) or not data.get('id'):
+            return None
+
+        details = {
+            'directors': SoapMovie._names(data.get('directors')),
+            'actors': SoapMovie._names(data.get('actors'))[:SoapMovie.MAX_ACTORS],
+            'genres': SoapMovie._names(data.get('genres')),
+            'description': data.get('description') or '',
+            'description_ru': data.get('description_ru') or '',
+        }
+        self.movie_details_cache.set('movie_{0}'.format(mid), json.dumps(details))
+        return details
+
+    def _add_movie_details(self, rows):
+        """Fills the API movie rows with their details, in place."""
+        if not self.config.movie_details:
+            return
+
+        missing = []
+        for row in rows:
+            details = self._cached_movie_details(row['id'])
+            if details is None:
+                missing.append(row)
+            else:
+                row.update(details)
+
+        missing = missing[:self.MOVIE_DETAILS_FETCH_LIMIT]
+        if not missing:
+            return
+
+        with ThreadPoolExecutor(self.MOVIE_DETAILS_WORKERS) as pool:
+            fetched = pool.map(lambda row: self._fetch_movie_details(row['id']), missing)
+            for row, details in zip(missing, fetched):
+                if details:
+                    row.update(details)
+
+    def _movie_menu_rows(self, rows):
+        self._add_movie_details(rows)
+        # Movie rows use 'id', not 'sid'.
+        return [SoapMovie(int(row['id']), row).menu() for row in rows]
+
     def get_movies(self, type):
         """type is 'all' or 'my' -> looked up as 'movie_all' / 'movie_my'."""
-        key = 'movie_' + (type or 'all')
-        # Movie rows use 'id', not 'sid'.
-        return [
-            SoapMovie(int(row['id']), row).menu()
-            for row in self.get_list(key)
-        ]
+        return self._movie_menu_rows(self.get_list('movie_' + (type or 'all')))
 
     def get_movie_franchises(self):
         return [
@@ -1529,11 +1641,10 @@ class SoapApi(object):
         ]
 
     def get_movie_franchise(self, url_name):
-        return [
-            SoapMovie(int(row['id']), row).menu()
-            for row in self.get_list(urllib.parse.quote(url_name, safe=''),
-                                     url_template=self.MOVIE_FRANCHISE_URL)
-        ]
+        return self._movie_menu_rows(
+            self.get_list(urllib.parse.quote(url_name, safe=''),
+                          url_template=self.MOVIE_FRANCHISE_URL)
+        )
 
     def get_movie(self, mid):
         mid = int(mid)
@@ -1789,7 +1900,7 @@ class SoapApi(object):
         return self.main()
 
 
-def kodi_draw_list(parts, rows):
+def kodi_draw_list(parts, rows, content='files'):
     for row in rows:
         xbmcplugin.addDirectoryItem(*row.item(parts))
 
@@ -1798,7 +1909,7 @@ def kodi_draw_list(parts, rows):
     xbmcplugin.addSortMethod(h, xbmcplugin.SORT_METHOD_VIDEO_RATING)
     xbmcplugin.addSortMethod(h, xbmcplugin.SORT_METHOD_VIDEO_YEAR)
     xbmcplugin.addSortMethod(h, xbmcplugin.SORT_METHOD_DATE)
-    xbmcplugin.setContent(h, 'files')
+    xbmcplugin.setContent(h, content)
     xbmcplugin.endOfDirectory(h)
 
 class KodiUrl(object):
@@ -1875,7 +1986,10 @@ def addon_main():
     rows = api.process(parts)
 
     if rows is not None:
-        kodi_draw_list(parts, rows)
+        # Movie lists get the 'movies' content type so skins show the cast,
+        # director and genres in their info views.
+        content = 'movies' if parts.page in ('Movies', 'MovieFranchise') else 'files'
+        kodi_draw_list(parts, rows, content)
 
 if sys.argv[1] == 'clearcache':
     clean_cache()
