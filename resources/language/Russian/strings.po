@@ -148,6 +148,10 @@ msgctxt "#30133"
 msgid "Clear cache"
 msgstr "Стереть кеши"
 
+msgctxt "#30134"
+msgid "Show cast, director and genres in movie lists (slower)"
+msgstr "Показывать актёров, режиссёра и жанры в списках фильмов (медленнее)"
+
 msgctxt "#32001"
 msgid "My shows"
 msgstr "Мои сериалы"
@@ -164,6 +168,30 @@ msgctxt "#32004"
 msgid "Recommended"
 msgstr "Что еще посмотреть?"
 
+msgctxt "#32005"
+msgid "Franchises"
+msgstr "Франшизы"
+
+msgctxt "#32006"
+msgid "Movies"
+msgstr "Фильмы"
+
+msgctxt "#32007"
+msgid "My movies"
+msgstr "Мои фильмы"
+
+msgctxt "#32008"
+msgid "All movies"
+msgstr "Все фильмы"
+
+msgctxt "#32009"
+msgid "Popular movies"
+msgstr "Популярные фильмы"
+
+msgctxt "#32010"
+msgid "New movies"
+msgstr "Новые фильмы"
+
 msgctxt "#32011"
 msgid "Last 20 episodes"
 msgstr "Последние 20 эпизодов"
@@ -171,6 +199,26 @@ msgstr "Последние 20 эпизодов"
 msgctxt "#32012"
 msgid "Unwatched episodes"
 msgstr "C непросмотренными эпизодами"
+
+msgctxt "#32013"
+msgid "My unwatched movies"
+msgstr "Мои непросмотренные фильмы"
+
+msgctxt "#32014"
+msgid "Genres"
+msgstr "Жанры"
+
+msgctxt "#32015"
+msgid "Previous page"
+msgstr "Предыдущая страница"
+
+msgctxt "#32016"
+msgid "Next page"
+msgstr "Следующая страница"
+
+msgctxt "#32017"
+msgid "Jump to letter..."
+msgstr "Перейти к букве..."
 
 msgctxt "#32021"
 msgid "Original"
@@ -205,12 +253,20 @@ msgid "Remove from My shows"
 msgstr "Убрать из моих сериалов"
 
 msgctxt "#32043"
-msgid "Mark as Not watched"
-msgstr "Пометить как непросмотренный"
+msgid "Mark as unwatched (soap4.me)"
+msgstr "Пометить как непросмотренный (soap4.me)"
 
 msgctxt "#32044"
-msgid "Mark as Watched"
-msgstr "Пометить как просмотренный"
+msgid "Mark as watched (soap4.me)"
+msgstr "Пометить как просмотренный (soap4.me)"
+
+msgctxt "#32045"
+msgid "Add to My Movies"
+msgstr "Добавить в мои фильмы"
+
+msgctxt "#32046"
+msgid "Remove from My Movies"
+msgstr "Убрать из моих фильмов"
 
 msgctxt "#32101"
 msgid "Play"

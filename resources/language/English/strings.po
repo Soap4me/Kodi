@@ -148,6 +148,10 @@ msgctxt "#30133"
 msgid "Clear cache"
 msgstr ""
 
+msgctxt "#30134"
+msgid "Show cast, director and genres in movie lists (slower)"
+msgstr ""
+
 msgctxt "#32001"
 msgid "My shows"
 msgstr ""
@@ -164,12 +168,56 @@ msgctxt "#32004"
 msgid "Recommended"
 msgstr ""
 
+msgctxt "#32005"
+msgid "Franchises"
+msgstr ""
+
+msgctxt "#32006"
+msgid "Movies"
+msgstr ""
+
+msgctxt "#32007"
+msgid "My movies"
+msgstr ""
+
+msgctxt "#32008"
+msgid "All movies"
+msgstr ""
+
+msgctxt "#32009"
+msgid "Popular movies"
+msgstr ""
+
+msgctxt "#32010"
+msgid "New movies"
+msgstr ""
+
 msgctxt "#32011"
 msgid "Last 20 episodes"
 msgstr ""
 
 msgctxt "#32012"
 msgid "Unwatched episodes"
+msgstr ""
+
+msgctxt "#32013"
+msgid "My unwatched movies"
+msgstr ""
+
+msgctxt "#32014"
+msgid "Genres"
+msgstr ""
+
+msgctxt "#32015"
+msgid "Previous page"
+msgstr ""
+
+msgctxt "#32016"
+msgid "Next page"
+msgstr ""
+
+msgctxt "#32017"
+msgid "Jump to letter..."
 msgstr ""
 
 msgctxt "#32021"
@@ -205,11 +253,19 @@ msgid "Remove from My shows"
 msgstr ""
 
 msgctxt "#32043"
-msgid "Mark as Not watched"
+msgid "Mark as unwatched (soap4.me)"
 msgstr ""
 
 msgctxt "#32044"
-msgid "Mark as Watched"
+msgid "Mark as watched (soap4.me)"
+msgstr ""
+
+msgctxt "#32045"
+msgid "Add to My Movies"
+msgstr ""
+
+msgctxt "#32046"
+msgid "Remove from My Movies"
 msgstr ""
 
 msgctxt "#32101"

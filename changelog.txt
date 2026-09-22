@@ -1,3 +1,13 @@
+v1.3.0
+- Add Movies: my movies, my unwatched movies, popular, new, all movies, genres and franchises
+- Play movies through inputstream.adaptive (now required), resuming where you left off on this device
+- Add to / remove from my movies, mark movies watched / unwatched
+- Show quality, all available ratings, and (optional setting) director, cast, genres and synopsis in movie lists
+- Show whole days left in the subscription message
+- Fix the "subtitles off" setting
+- Verify TLS certificates for all connections
+- Use the Kodi 20+ video info API, without the "Unknown Video Info Key" errors
+
 v1.2.0
 - Fix compatibility with Kodi 21+
 - Replace deprecated xbmc.translatePath() with xbmcvfs.translatePath()
