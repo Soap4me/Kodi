@@ -1009,10 +1009,23 @@ class SoapMovie(object):
         # Movies use a JSON boolean, unlike the show API's 0/1 integer.
         return bool(self.data.get('watched'))
 
-    def title(self):
+    def _prefer_ru(self):
+        try:
+            return xbmc.getLanguage(xbmc.ISO_639_1) == 'ru'
+        except Exception:
+            return False
+
+    def _title_en(self):
         # 'title' is the display title; there is no 'title_en' like shows have.
-        raw = self.data.get('title') or self.data.get('title_original') or ''
-        return raw.replace('&#039;', "'").replace("&amp;", "&").replace('&quot;', '"')
+        return self.data.get('title') or self.data.get('title_original')
+
+    def _title_ru(self):
+        return self.data.get('title_ru')
+
+    def title(self):
+        en, ru = self._title_en(), self._title_ru()
+        chosen = (ru or en) if self._prefer_ru() else (en or ru)
+        return html.unescape(chosen) if chosen else ''
 
     # Cast members shown per movie.
     MAX_ACTORS = 5
@@ -1063,11 +1076,7 @@ class SoapMovie(object):
         # the other one when it's missing.
         en = self.data.get('description')
         ru = self.data.get('description_ru')
-        try:
-            prefer_ru = xbmc.getLanguage(xbmc.ISO_639_1) == 'ru'
-        except Exception:
-            prefer_ru = False
-        description = (ru or en) if prefer_ru else (en or ru)
+        description = (ru or en) if self._prefer_ru() else (en or ru)
         return html.unescape(description) if description else description
 
     def is_liked(self):
@@ -1110,7 +1119,9 @@ class SoapMovie(object):
         title = self.title()
         year = self.data.get('year')
         runtime_raw = self.data.get('runtime')
-        title_ru = self.data.get('title_ru')
+        # Whichever title isn't already the label, as a quick hint at the
+        # other language -- repeating the same one twice would be redundant.
+        other_title = self._title_en() if self._prefer_ru() else self._title_ru()
 
         meta = {
             'IMDBNumber': self.data.get('imdb_id'),
@@ -1154,10 +1165,10 @@ class SoapMovie(object):
             ts = dt.datetime.fromtimestamp(float(self.data.get('updated', 0)))
             meta['Date'] = ts.strftime('%d-%m-%Y')
 
-        # The Russian title, year, runtime (and 4K, as the exception) always
-        # lead; the synopsis follows when the details are available.
+        # The other-language title, year, runtime (and 4K, as the exception)
+        # always lead; the synopsis follows when the details are available.
         description = ' \u2022 '.join(
-            str(p) for p in (title_ru, year, runtime_raw, '4K' if 'UHD' in qualities else None) if p
+            str(p) for p in (other_title, year, runtime_raw, '4K' if 'UHD' in qualities else None) if p
         )
         synopsis = self._description()
         if synopsis:
