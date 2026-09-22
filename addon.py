@@ -667,8 +667,7 @@ class MenuRow(object):
         vtype = 'video'
 
         li = xbmcgui.ListItem(label=self.title)
-        li.setArt({'icon': str(self.img)})
-        li.setArt({'thumb': str(self.img)})
+        li.setArt({'icon': str(self.img), 'thumb': str(self.img), 'poster': str(self.img)})
 
         if self.is_watched:
             info["playcount"] = 10
