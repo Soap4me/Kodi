@@ -208,6 +208,18 @@ msgctxt "#32014"
 msgid "Genres"
 msgstr "Жанры"
 
+msgctxt "#32015"
+msgid "Previous page"
+msgstr "Предыдущая страница"
+
+msgctxt "#32016"
+msgid "Next page"
+msgstr "Следующая страница"
+
+msgctxt "#32017"
+msgid "Jump to letter..."
+msgstr "Перейти к букве..."
+
 msgctxt "#32021"
 msgid "Original"
 msgstr "Оригинал"

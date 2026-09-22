@@ -208,6 +208,18 @@ msgctxt "#32014"
 msgid "Genres"
 msgstr ""
 
+msgctxt "#32015"
+msgid "Previous page"
+msgstr ""
+
+msgctxt "#32016"
+msgid "Next page"
+msgstr ""
+
+msgctxt "#32017"
+msgid "Jump to letter..."
+msgstr ""
+
 msgctxt "#32021"
 msgid "Original"
 msgstr ""

@@ -1624,7 +1624,11 @@ class SoapApi(object):
     # filled by a bounded number of parallel detail requests per listing --
     # a long list (all movies) fills in gradually as it's browsed.
     MOVIE_DETAILS_CACHE_MINUTES = 7 * 24 * 60
+    # Also the page size for paginated movie listings (see _render_movie_listing):
+    # kept equal on purpose, so every movie on a page always gets its details
+    # fetched, however uncached the page turns out to be.
     MOVIE_DETAILS_FETCH_LIMIT = 40
+    MOVIES_PAGE_SIZE = MOVIE_DETAILS_FETCH_LIMIT
     MOVIE_DETAILS_WORKERS = 8
 
     def _cached_movie_details(self, mid):
@@ -1690,20 +1694,79 @@ class SoapApi(object):
     # cut-off falls inside a batch of movies that were added together.
     MOVIES_NEW_COUNT = 32
 
-    def get_movies(self, type):
-        """type: 'all', 'my', 'popular' (API lists), 'new' or 'unwatched' (derived)."""
-        type = type or 'all'
+    @staticmethod
+    def _movie_sort_key(row):
+        # Same cleanup as SoapMovie.title(), so the sort matches what's shown.
+        return SoapMovie(int(row['id']), row).title().lower()
 
+    def _movie_letters(self, rows, link_base):
+        """
+        rows: the full listing, already sorted by _movie_sort_key. One row per
+        first letter (or '#' for anything not starting with one), linking back
+        into the same listing at that letter's offset.
+        """
+        seen = set()
+        letters = []
+        for i, row in enumerate(rows):
+            letter = self._movie_sort_key(row)[:1].upper()
+            if not letter.isalpha():
+                letter = '#'
+            if letter in seen:
+                continue
+            seen.add(letter)
+            letters.append(MenuRow(dict(link_base, offset=str(i), jump=''), letter, is_folder=True))
+        return letters
+
+    def _render_movie_listing(self, rows, link_base, parts):
+        """
+        Paginates an alphabetically-sorted movie listing, with a jump-to-letter
+        entry point when there's more than one page. link_base identifies the
+        listing itself (e.g. {'page': 'Movies', 'param': 'all'}) -- 'offset'
+        and 'jump' are always set explicitly on every link built here, so
+        neither ever leaks from the current URL into an unrelated one.
+        """
+        rows = sorted(rows, key=self._movie_sort_key)
+
+        if parts.jump:
+            return self._movie_letters(rows, link_base)
+
+        offset = to_int(parts.offset or '')
+        page = rows[offset:offset + self.MOVIES_PAGE_SIZE]
+
+        result = []
+        if offset == 0 and len(rows) > self.MOVIES_PAGE_SIZE:
+            result.append(MenuRow(dict(link_base, offset='', jump='1'), l.movie_jump_to_letter, is_folder=True))
+        if offset > 0:
+            prev_offset = max(0, offset - self.MOVIES_PAGE_SIZE)
+            result.append(MenuRow(dict(link_base, offset=str(prev_offset), jump=''), l.previous_page, is_folder=True))
+
+        result.extend(self._movie_menu_rows(page))
+
+        if offset + self.MOVIES_PAGE_SIZE < len(rows):
+            result.append(MenuRow(dict(link_base, offset=str(offset + self.MOVIES_PAGE_SIZE), jump=''), l.next_page, is_folder=True))
+
+        return result
+
+    def get_movies(self, parts):
+        """parts.param: 'all', 'my', 'popular' (API lists), 'new' or 'unwatched' (derived)."""
+        type = parts.param or 'all'
+
+        # Popular/new have their own meaningful order (rating/recency), and
+        # are always small -- keep them exactly as before, unpaginated and
+        # unsorted, rather than alphabetising something order matters for.
         if type == 'new':
             rows = sorted(self.get_list('movie_all'), key=lambda row: int(row['id']), reverse=True)
-            rows = rows[:self.MOVIES_NEW_COUNT]
-        elif type == 'unwatched':
+            return self._movie_menu_rows(rows[:self.MOVIES_NEW_COUNT])
+        if type == 'popular':
+            return self._movie_menu_rows(self.get_list('movie_popular'))
+
+        if type == 'unwatched':
             # My movies that haven't been watched yet: a watchlist.
             rows = [row for row in self.get_list('movie_my') if not row.get('watched')]
         else:
             rows = self.get_list('movie_' + type)
 
-        return self._movie_menu_rows(rows)
+        return self._render_movie_listing(rows, {'page': 'Movies', 'param': type}, parts)
 
     def get_movie_franchises(self):
         return [
@@ -1716,11 +1779,9 @@ class SoapApi(object):
             for row in self.get_list('movie_franchises')
         ]
 
-    def get_movie_franchise(self, url_name):
-        return self._movie_menu_rows(
-            self.get_list(urllib.parse.quote(url_name, safe=''),
-                          url_template=self.MOVIE_FRANCHISE_URL)
-        )
+    def get_movie_franchise(self, parts):
+        rows = self.get_list(urllib.parse.quote(parts.sid, safe=''), url_template=self.MOVIE_FRANCHISE_URL)
+        return self._render_movie_listing(rows, {'page': 'MovieFranchise', 'sid': parts.sid}, parts)
 
     def get_movie_genres(self):
         """
@@ -1740,11 +1801,9 @@ class SoapApi(object):
             for url_name in sorted(counts, key=lambda u: (-counts[u], names[u]))
         ]
 
-    def get_movie_genre(self, url_name):
-        return self._movie_menu_rows(
-            self.get_list(urllib.parse.quote(url_name, safe=''),
-                          url_template=self.MOVIE_GENRE_URL)
-        )
+    def get_movie_genre(self, parts):
+        rows = self.get_list(urllib.parse.quote(parts.sid, safe=''), url_template=self.MOVIE_GENRE_URL)
+        return self._render_movie_listing(rows, {'page': 'MovieGenre', 'sid': parts.sid}, parts)
 
     def get_movie(self, mid):
         mid = int(mid)
@@ -1952,15 +2011,15 @@ class SoapApi(object):
         elif parts.page == 'MoviesMenu':
             return self.movies_menu()
         elif parts.page == 'Movies':
-            return self.get_movies(parts.param)
+            return self.get_movies(parts)
         elif parts.page == 'MovieGenres':
             return self.get_movie_genres()
         elif parts.page == 'MovieGenre':
-            return self.get_movie_genre(parts.sid)
+            return self.get_movie_genre(parts)
         elif parts.page == 'MovieFranchises':
             return self.get_movie_franchises()
         elif parts.page == 'MovieFranchise':
-            return self.get_movie_franchise(parts.sid)
+            return self.get_movie_franchise(parts)
         elif parts.page == 'PlayMovie':
             # No variant picker to fall back to, unlike Episodes/Play; return to the main menu.
             if not self.get_play_movie(parts.sid):
@@ -2006,7 +2065,7 @@ class SoapApi(object):
         return self.main()
 
 
-def kodi_draw_list(parts, rows, content='files'):
+def kodi_draw_list(parts, rows, content='files', update_listing=False):
     for row in rows:
         xbmcplugin.addDirectoryItem(*row.item(parts))
 
@@ -2016,10 +2075,10 @@ def kodi_draw_list(parts, rows, content='files'):
     xbmcplugin.addSortMethod(h, xbmcplugin.SORT_METHOD_VIDEO_YEAR)
     xbmcplugin.addSortMethod(h, xbmcplugin.SORT_METHOD_DATE)
     xbmcplugin.setContent(h, content)
-    xbmcplugin.endOfDirectory(h)
+    xbmcplugin.endOfDirectory(h, updateListing=update_listing)
 
 class KodiUrl(object):
-    __slots__ = ('page', 'param', 'sid', 'season', 'epnum', 'eid')
+    __slots__ = ('page', 'param', 'sid', 'season', 'epnum', 'eid', 'offset', 'jump')
 
     def __init__(self, params):
         for key in self.__slots__:
@@ -2031,10 +2090,15 @@ class KodiUrl(object):
 
         parts = url_params.split('&')
         parts = [_f for _f in parts if _f]
-        params = [x.split('=', 1) for x in parts]
         result = dict()
 
-        for k, v in params:
+        for x in parts:
+            # Not always "k=v": Kodi drops the '=' for a param whose value is
+            # an empty string (e.g. our own 'jump=' comes back as a bare
+            # 'jump') by the time it re-invokes the plugin, so split() would
+            # crash on the missing second value. partition() always returns
+            # a 3-tuple, so a bare key just becomes an empty-string value.
+            k, _, v = x.partition('=')
             result[urllib.parse.unquote(k)] = urllib.parse.unquote(v)
 
         return KodiUrl(result)
@@ -2092,10 +2156,20 @@ def addon_main():
     rows = api.process(parts)
 
     if rows is not None:
+        movie_listing = parts.page in ('Movies', 'MovieFranchise', 'MovieGenre')
         # Movie lists get the 'movies' content type so skins show the cast,
         # director and genres in their info views.
-        content = 'movies' if parts.page in ('Movies', 'MovieFranchise', 'MovieGenre') else 'files'
-        kodi_draw_list(parts, rows, content)
+        content = 'movies' if movie_listing else 'files'
+        # Next/Previous/jump-to-letter stay within the SAME listing, so treat
+        # them as replacing the current page in Kodi's history rather than
+        # descending into a subfolder -- otherwise leaving a page reached by
+        # paging or jumping needs as many Back presses as steps it took to
+        # get there, instead of going straight back to where the listing was
+        # opened from. Only these follow-up requests carry 'offset'/'jump' at
+        # all; the plain, first-time entry from the Movies/Genres/Franchises
+        # menu never sets either, and must still be recorded normally.
+        update_listing = movie_listing and (parts.offset is not None or parts.jump is not None)
+        kodi_draw_list(parts, rows, content, update_listing)
 
 if sys.argv[1] == 'clearcache':
     clean_cache()
