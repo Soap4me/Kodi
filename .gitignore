@@ -54,3 +54,6 @@ target/
 
 # Intellij IDEA, PyCharm
 .idea/
+
+# release artifacts
+dist/
